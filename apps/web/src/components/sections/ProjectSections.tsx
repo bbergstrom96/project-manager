@@ -9,8 +9,10 @@ import {
   PointerSensor,
   useSensor,
   useSensors,
+  useDroppable,
   type DragStartEvent,
   type DragEndEvent,
+  type DragOverEvent,
 } from "@dnd-kit/core";
 import {
   SortableContext,
@@ -44,50 +46,18 @@ interface SectionItemProps {
   isDragging?: boolean;
   isReorderMode?: boolean;
   onRegisterRef?: (el: HTMLDivElement | null) => void;
+  isDropTarget?: boolean;
 }
 
-function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isDraggingProp, isReorderMode, onRegisterRef }: SectionItemProps) {
+function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isDraggingProp, isReorderMode, onRegisterRef, isDropTarget }: SectionItemProps) {
   const { updateSection, deleteSection } = useSectionStore();
-  const { reorderTasks } = useTaskStore();
-  const [activeTask, setActiveTask] = useState<TaskWithLabels | null>(null);
-
-  const taskSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
-
-  const handleTaskDragStart = (event: DragStartEvent) => {
-    const task = tasks.find((t) => t.id === event.active.id);
-    if (task) {
-      setActiveTask(task);
-    }
-  };
-
-  const handleTaskDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveTask(null);
-
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = tasks.findIndex((t) => t.id === active.id);
-    const newIndex = tasks.findIndex((t) => t.id === over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
-      await reorderTasks(reorderedTasks.map((t) => t.id));
-    }
-  };
-
-  const handleTaskDragCancel = () => {
-    setActiveTask(null);
-  };
   const [isOpen, setIsOpen] = useState(true);
+
+  // Set up this section as a drop target for tasks
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: `section-drop-${section.id}`,
+    data: { type: "section", sectionId: section.id },
+  });
   const [showAddTask, setShowAddTask] = useState(false);
   const [hasOpenedForm, setHasOpenedForm] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -102,7 +72,7 @@ function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isD
     transform,
     transition,
     isDragging: isDraggingSortable,
-  } = useSortable({ id: section.id });
+  } = useSortable({ id: `section-${section.id}` });
 
   const isDragging = isDraggingProp || isDraggingSortable;
 
@@ -235,32 +205,20 @@ function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isD
 
       {/* Tasks - hidden in reorder mode */}
       {showContent && (
-        <div className="pl-6">
-          <DndContext
-            sensors={taskSensors}
-            collisionDetection={closestCorners}
-            onDragStart={handleTaskDragStart}
-            onDragEnd={handleTaskDragEnd}
-            onDragCancel={handleTaskDragCancel}
-          >
-            <SortableContext
-              items={tasks.map((t) => t.id)}
-              strategy={verticalListSortingStrategy}
-            >
-              {tasks.length > 0 && (
-                <div className="divide-y">
-                  {tasks.map((task) => (
-                    <TaskItem key={task.id} task={task} hideProject />
-                  ))}
-                </div>
-              )}
-            </SortableContext>
-            <DragOverlay>
-              {activeTask ? (
-                <TaskItemOverlay task={activeTask} hideProject />
-              ) : null}
-            </DragOverlay>
-          </DndContext>
+        <div
+          ref={setDroppableRef}
+          className={cn(
+            "pl-5 min-h-[40px] rounded-md transition-colors",
+            (isOver || isDropTarget) && "bg-muted/50"
+          )}
+        >
+          {tasks.length > 0 && (
+            <div className="divide-y">
+              {tasks.map((task) => (
+                <TaskItem key={task.id} task={task} hideProject />
+              ))}
+            </div>
+          )}
 
           {/* Add task form/button */}
           <div className="mt-2">
@@ -316,25 +274,19 @@ interface UnsectionedTasksProps {
   tasks: TaskWithLabels[];
   projectId: string;
   onTaskCreated?: (task: TaskWithLabels) => void;
+  isDropTarget?: boolean;
 }
 
-function UnsectionedTasks({ tasks, projectId, onTaskCreated }: UnsectionedTasksProps) {
-  const { reorderTasks } = useTaskStore();
+function UnsectionedTasks({ tasks, projectId, onTaskCreated, isDropTarget }: UnsectionedTasksProps) {
   const [showAddTask, setShowAddTask] = useState(false);
   const [hasOpenedForm, setHasOpenedForm] = useState(false);
-  const [activeTask, setActiveTask] = useState<TaskWithLabels | null>(null);
   const formKey = useRef(0);
 
-  const taskSensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(KeyboardSensor, {
-      coordinateGetter: sortableKeyboardCoordinates,
-    })
-  );
+  // Set up as a drop target for tasks (null sectionId)
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
+    id: "section-drop-unsectioned",
+    data: { type: "section", sectionId: null },
+  });
 
   const handleOpenForm = () => {
     formKey.current += 1;
@@ -342,61 +294,21 @@ function UnsectionedTasks({ tasks, projectId, onTaskCreated }: UnsectionedTasksP
     setShowAddTask(true);
   };
 
-  const handleTaskDragStart = (event: DragStartEvent) => {
-    const task = tasks.find((t) => t.id === event.active.id);
-    if (task) {
-      setActiveTask(task);
-    }
-  };
-
-  const handleTaskDragEnd = async (event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveTask(null);
-
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = tasks.findIndex((t) => t.id === active.id);
-    const newIndex = tasks.findIndex((t) => t.id === over.id);
-
-    if (oldIndex !== -1 && newIndex !== -1) {
-      const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
-      await reorderTasks(reorderedTasks.map((t) => t.id));
-    }
-  };
-
-  const handleTaskDragCancel = () => {
-    setActiveTask(null);
-  };
-
-  // If there are no unsectioned tasks and no sections exist yet, show nothing special
-  // But we still want the add task button
   return (
-    <div className="mb-4">
-      <DndContext
-        sensors={taskSensors}
-        collisionDetection={closestCorners}
-        onDragStart={handleTaskDragStart}
-        onDragEnd={handleTaskDragEnd}
-        onDragCancel={handleTaskDragCancel}
-      >
-        <SortableContext
-          items={tasks.map((t) => t.id)}
-          strategy={verticalListSortingStrategy}
-        >
-          {tasks.length > 0 && (
-            <div className="divide-y">
-              {tasks.map((task) => (
-                <TaskItem key={task.id} task={task} hideProject />
-              ))}
-            </div>
-          )}
-        </SortableContext>
-        <DragOverlay>
-          {activeTask ? (
-            <TaskItemOverlay task={activeTask} hideProject />
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+    <div
+      ref={setDroppableRef}
+      className={cn(
+        "pl-5 mb-4 min-h-[40px] rounded-md transition-colors",
+        (isOver || isDropTarget) && "bg-muted/50"
+      )}
+    >
+      {tasks.length > 0 && (
+        <div className="divide-y">
+          {tasks.map((task) => (
+            <TaskItem key={task.id} task={task} hideProject />
+          ))}
+        </div>
+      )}
 
       {/* Add task form/button for unsectioned tasks */}
       <div className="mt-2">
@@ -515,16 +427,20 @@ const COLLAPSED_SECTION_HEIGHT = 48; // ~36px content + 12px margin
 
 export function ProjectSections({ projectId, tasks, onTaskCreated }: ProjectSectionsProps) {
   const { sections, fetchSections, clearSections, reorderSections } = useSectionStore();
+  const { updateTask, reorderTasks } = useTaskStore();
   const [activeSection, setActiveSection] = useState<{ section: Section; taskCount: number; index: number } | null>(null);
+  const [activeTask, setActiveTask] = useState<TaskWithLabels | null>(null);
+  const [overSectionId, setOverSectionId] = useState<string | null | undefined>(undefined);
   const [isReorderMode, setIsReorderMode] = useState(false);
   const [spacerHeight, setSpacerHeight] = useState(0);
   const sectionRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Single sensor set for unified DndContext
   const sensors = useSensors(
     useSensor(PointerSensor, {
       activationConstraint: {
-        distance: 5,
+        distance: 8,
       },
     }),
     useSensor(KeyboardSensor, {
@@ -551,34 +467,9 @@ export function ProjectSections({ projectId, tasks, onTaskCreated }: ProjectSect
     }
   });
 
-  const handleDragStart = (event: DragStartEvent) => {
-    const section = sections.find((s) => s.id === event.active.id);
-    if (section) {
-      const taskCount = tasksBySection.get(section.id)?.length || 0;
-      const index = sections.findIndex((s) => s.id === section.id);
-
-      // Get positions to calculate spacer
-      const sectionElement = sectionRefs.current.get(section.id);
-      const containerElement = containerRef.current;
-
-      if (sectionElement && containerElement) {
-        const sectionRect = sectionElement.getBoundingClientRect();
-        const containerRect = containerElement.getBoundingClientRect();
-
-        // Section's position relative to the container (not viewport)
-        const sectionOffsetInContainer = sectionRect.top - containerRect.top;
-
-        // Where it will be after collapsing (index * collapsed height)
-        const collapsedOffset = index * COLLAPSED_SECTION_HEIGHT;
-
-        // Spacer = difference between original position and collapsed position
-        setSpacerHeight(Math.max(0, sectionOffsetInContainer - collapsedOffset));
-      }
-
-      setActiveSection({ section, taskCount, index });
-      setIsReorderMode(true);
-    }
-  };
+  // All sortable IDs - tasks use their IDs, sections use "section-" prefix
+  const allTaskIds = tasks.map((t) => t.id);
+  const allSectionIds = sections.map((s) => `section-${s.id}`);
 
   const registerRef = (id: string, el: HTMLDivElement | null) => {
     if (el) {
@@ -588,69 +479,206 @@ export function ProjectSections({ projectId, tasks, onTaskCreated }: ProjectSect
     }
   };
 
+  // === Unified drag handlers ===
+  const handleDragStart = (event: DragStartEvent) => {
+    const activeId = event.active.id as string;
+
+    // Check if dragging a section (prefixed with "section-")
+    if (activeId.startsWith("section-")) {
+      const sectionId = activeId.replace("section-", "");
+      const section = sections.find((s) => s.id === sectionId);
+      if (section) {
+        const taskCount = tasksBySection.get(section.id)?.length || 0;
+        const index = sections.findIndex((s) => s.id === sectionId);
+
+        // Get positions to calculate spacer
+        const sectionElement = sectionRefs.current.get(sectionId);
+        const containerElement = containerRef.current;
+
+        if (sectionElement && containerElement) {
+          const sectionRect = sectionElement.getBoundingClientRect();
+          const containerRect = containerElement.getBoundingClientRect();
+          const sectionOffsetInContainer = sectionRect.top - containerRect.top;
+          const collapsedOffset = index * COLLAPSED_SECTION_HEIGHT;
+          setSpacerHeight(Math.max(0, sectionOffsetInContainer - collapsedOffset));
+        }
+
+        setActiveSection({ section, taskCount, index });
+        setIsReorderMode(true);
+      }
+    } else {
+      // Dragging a task
+      const task = tasks.find((t) => t.id === activeId);
+      if (task) {
+        setActiveTask(task);
+      }
+    }
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+
+    // Only track section for task drags
+    if (!activeTask || !over) {
+      setOverSectionId(undefined);
+      return;
+    }
+
+    const overId = over.id as string;
+
+    // Check if we're over a section droppable
+    if (overId.startsWith("section-drop-")) {
+      const sectionId = overId === "section-drop-unsectioned" ? null : overId.replace("section-drop-", "");
+      setOverSectionId(sectionId);
+    } else if (!overId.startsWith("section-")) {
+      // We're over a task - find which section that task belongs to
+      const overTask = tasks.find((t) => t.id === overId);
+      if (overTask) {
+        setOverSectionId(overTask.sectionId);
+      }
+    }
+  };
+
   const handleDragEnd = async (event: DragEndEvent) => {
     const { active, over } = event;
-    setActiveSection(null);
-    setIsReorderMode(false);
-    setSpacerHeight(0);
+    const activeId = active.id as string;
 
-    if (!over || active.id === over.id) return;
+    // Handle section drag end
+    if (activeId.startsWith("section-")) {
+      setActiveSection(null);
+      setIsReorderMode(false);
+      setSpacerHeight(0);
 
-    const oldIndex = sections.findIndex((s) => s.id === active.id);
-    const newIndex = sections.findIndex((s) => s.id === over.id);
+      if (!over || active.id === over.id) return;
+
+      const oldSectionId = activeId.replace("section-", "");
+      const newSectionId = (over.id as string).replace("section-", "");
+
+      const oldIndex = sections.findIndex((s) => s.id === oldSectionId);
+      const newIndex = sections.findIndex((s) => s.id === newSectionId);
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const reorderedSections = arrayMove(sections, oldIndex, newIndex);
+        await reorderSections(reorderedSections.map((s) => s.id));
+      }
+      return;
+    }
+
+    // Handle task drag end
+    const draggedTask = activeTask;
+    setActiveTask(null);
+    setOverSectionId(undefined);
+
+    if (!over || !draggedTask) return;
+
+    const overId = over.id as string;
+
+    // Determine target section
+    let targetSectionId: string | null;
+    if (overId.startsWith("section-drop-")) {
+      targetSectionId = overId === "section-drop-unsectioned" ? null : overId.replace("section-drop-", "");
+    } else if (overId.startsWith("section-")) {
+      // Dropped on a section header - ignore
+      return;
+    } else {
+      // Dropped on a task - get that task's section
+      const overTask = tasks.find((t) => t.id === overId);
+      targetSectionId = overTask?.sectionId ?? null;
+    }
+
+    const sourceSectionId = draggedTask.sectionId;
+
+    // Cross-section move
+    if (targetSectionId !== sourceSectionId) {
+      await updateTask(draggedTask.id, { sectionId: targetSectionId });
+      return;
+    }
+
+    // Same section reorder
+    if (active.id === over.id) return;
+
+    const sectionTasks = targetSectionId === null
+      ? unsectionedTasks
+      : tasksBySection.get(targetSectionId) || [];
+
+    const oldIndex = sectionTasks.findIndex((t) => t.id === active.id);
+    const newIndex = sectionTasks.findIndex((t) => t.id === over.id);
 
     if (oldIndex !== -1 && newIndex !== -1) {
-      const reorderedSections = arrayMove(sections, oldIndex, newIndex);
-      await reorderSections(reorderedSections.map((s) => s.id));
+      const reordered = arrayMove(sectionTasks, oldIndex, newIndex);
+      await reorderTasks(reordered.map((t) => t.id));
     }
   };
 
   const handleDragCancel = () => {
+    setActiveTask(null);
     setActiveSection(null);
+    setOverSectionId(undefined);
     setIsReorderMode(false);
     setSpacerHeight(0);
   };
 
   return (
     <div ref={containerRef}>
-      {/* Unsectioned tasks - hidden in reorder mode */}
-      {!isReorderMode && (
-        <UnsectionedTasks
-          tasks={unsectionedTasks}
-          projectId={projectId}
-          onTaskCreated={onTaskCreated}
-        />
-      )}
-
-      {/* Sections with drag-and-drop */}
+      {/* Single unified DndContext for both tasks and sections */}
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
+        {/* Unsectioned tasks - hidden in reorder mode */}
+        {!isReorderMode && (
+          <SortableContext
+            items={unsectionedTasks.map(t => t.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <UnsectionedTasks
+              tasks={unsectionedTasks}
+              projectId={projectId}
+              onTaskCreated={onTaskCreated}
+              isDropTarget={overSectionId === null}
+            />
+          </SortableContext>
+        )}
+
+        {/* Sections with their own SortableContexts */}
         <SortableContext
-          items={sections.map((s) => s.id)}
+          items={allSectionIds}
           strategy={verticalListSortingStrategy}
         >
           {/* Spacer to position collapsed sections around drag point */}
           {isReorderMode && <div style={{ height: spacerHeight }} />}
-          {sections.map((section) => (
-            <SectionItem
-              key={section.id}
-              section={section}
-              tasks={tasksBySection.get(section.id) || []}
-              projectId={projectId}
-              onTaskCreated={onTaskCreated}
-              isDragging={activeSection?.section.id === section.id}
-              isReorderMode={isReorderMode}
-              onRegisterRef={(el) => registerRef(section.id, el)}
-            />
-          ))}
+          {sections.map((section) => {
+            const sectionTasks = tasksBySection.get(section.id) || [];
+            return (
+              <SortableContext
+                key={section.id}
+                items={sectionTasks.map(t => t.id)}
+                strategy={verticalListSortingStrategy}
+              >
+                <SectionItem
+                  section={section}
+                  tasks={sectionTasks}
+                  projectId={projectId}
+                  onTaskCreated={onTaskCreated}
+                  isDragging={activeSection?.section.id === section.id}
+                  isReorderMode={isReorderMode}
+                  onRegisterRef={(el) => registerRef(section.id, el)}
+                  isDropTarget={overSectionId === section.id}
+                />
+              </SortableContext>
+            );
+          })}
         </SortableContext>
+
+        {/* Drag overlays */}
         <DragOverlay>
-          {activeSection ? (
+          {activeTask ? (
+            <TaskItemOverlay task={activeTask} hideProject />
+          ) : activeSection ? (
             <SectionItemOverlay
               section={activeSection.section}
               taskCount={activeSection.taskCount}
