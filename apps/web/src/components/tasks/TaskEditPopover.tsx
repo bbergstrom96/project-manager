@@ -143,9 +143,9 @@ export function TaskEditPopover({
     <Popover open={open} onOpenChange={handleClose}>
       <PopoverTrigger asChild>{children}</PopoverTrigger>
       <PopoverContent
-        side="right"
+        side="bottom"
         align="start"
-        sideOffset={12}
+        sideOffset={4}
         className="w-72 p-0 bg-[#1e1e1e] border-[#3d3d3d]"
       >
         {/* Title with checkbox */}
