@@ -83,11 +83,26 @@ export const useTaskStore = create<TaskState>((set, get) => ({
   },
 
   updateTask: async (id, data) => {
-    // Optimistic update
+    // Optimistic update - convert date strings to Date objects for internal state
     const previousTasks = get().tasks;
+    const optimisticData: Partial<TaskWithLabels> = {
+      ...data,
+      dueDate: data.dueDate !== undefined
+        ? (data.dueDate ? new Date(data.dueDate) : null)
+        : undefined,
+      dueDateTime: data.dueDateTime !== undefined
+        ? (data.dueDateTime ? new Date(data.dueDateTime) : null)
+        : undefined,
+    };
+    // Remove undefined values so we don't overwrite existing data
+    Object.keys(optimisticData).forEach((key) => {
+      if (optimisticData[key as keyof typeof optimisticData] === undefined) {
+        delete optimisticData[key as keyof typeof optimisticData];
+      }
+    });
     set((state) => ({
       tasks: state.tasks.map((t) =>
-        t.id === id ? { ...t, ...data } : t
+        t.id === id ? { ...t, ...optimisticData } : t
       ),
     }));
 

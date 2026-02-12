@@ -19,6 +19,9 @@ import type {
   CreateAreaInput,
   UpdateAreaInput,
   UpdateAreaGoalInput,
+  PlanningNote,
+  CreatePlanningNoteInput,
+  UpdatePlanningNoteInput,
 } from "@proj-mgmt/shared";
 
 const API_BASE =
@@ -209,5 +212,28 @@ export const api = {
       request<Record<string, Record<string, string>>>(
         `/areas/goals?periods=${periods.join(",")}`
       ),
+  },
+
+  planningNotes: {
+    list: (quarter: string) =>
+      request<PlanningNote[]>(`/planning-notes?quarter=${quarter}`),
+    get: (id: string) => request<PlanningNote>(`/planning-notes/${id}`),
+    create: (data: CreatePlanningNoteInput) =>
+      request<PlanningNote>("/planning-notes", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdatePlanningNoteInput) =>
+      request<PlanningNote>(`/planning-notes/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/planning-notes/${id}`, { method: "DELETE" }),
+    reorder: (quarter: string, orderedIds: string[]) =>
+      request<void>("/planning-notes/reorder", {
+        method: "POST",
+        body: JSON.stringify({ quarter, orderedIds }),
+      }),
   },
 };

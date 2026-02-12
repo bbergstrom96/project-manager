@@ -180,6 +180,25 @@ model AreaGoal {
 }
 
 // ============================================
+// PLANNING NOTES (quarterly planning notes with tabs)
+// ============================================
+model PlanningNote {
+  id        String @id @default(cuid())
+  title     String @default("New Note")
+  content   String @default("")
+
+  // Quarter format: "2026-Q1", "2026-Q2", etc.
+  quarter   String
+  order     Int    @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([quarter])
+  @@index([order])
+}
+
+// ============================================
 // ENUMS
 // ============================================
 enum Priority {

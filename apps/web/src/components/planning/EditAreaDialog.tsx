@@ -24,7 +24,7 @@ export function EditAreaDialog({ area, open, onOpenChange }: EditAreaDialogProps
   const { updateArea } = useAreaStore();
   const [name, setName] = useState("");
   const [icon, setIcon] = useState("");
-  const [color, setColor] = useState(PROJECT_COLORS[0].hex);
+  const [color, setColor] = useState<string>(PROJECT_COLORS[0].hex);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {

@@ -252,7 +252,7 @@ export default function UpcomingPage() {
       if (targetDay) {
         setTasks((prev) =>
           prev.map((t) =>
-            t.id === taskId ? { ...t, dueDate: targetDay.toISOString() } : t
+            t.id === taskId ? { ...t, dueDate: targetDay } : t
           )
         );
       }

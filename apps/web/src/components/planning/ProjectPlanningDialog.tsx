@@ -45,7 +45,7 @@ export function ProjectPlanningDialog({
   const [mode, setMode] = useState<"select" | "create">("select");
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
   const [name, setName] = useState("");
-  const [color, setColor] = useState(PROJECT_COLORS[0].hex);
+  const [color, setColor] = useState<string>(PROJECT_COLORS[0].hex);
   const [startWeek, setStartWeek] = useState("");
   const [endWeek, setEndWeek] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);

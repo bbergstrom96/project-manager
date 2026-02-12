@@ -100,11 +100,11 @@ export function TaskEditPopover({
     try {
       const updated = await api.tasks.update(task.id, {
         content: content.trim(),
-        description: description.trim() || null,
+        description: description.trim() || undefined,
         priority,
-        dueDate: dueDate?.toISOString() || null,
+        dueDate: dueDate?.toISOString() || undefined,
         labelIds,
-        projectId,
+        projectId: projectId ?? undefined,
       });
       onUpdate(updated);
     } catch (error) {
