@@ -7,6 +7,7 @@ export const taskController = {
       const filters = {
         projectId: req.query.project_id as string | undefined,
         sectionId: req.query.section_id as string | undefined,
+        areaId: req.query.area_id as string | undefined,
         labelId: req.query.label_id as string | undefined,
         priority: req.query.priority as string | undefined,
         dueDate: req.query.due_date as "today" | "upcoming" | "overdue" | undefined,

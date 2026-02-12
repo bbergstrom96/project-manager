@@ -22,6 +22,7 @@ export type ApiResponse<T> = ApiSuccessResponse<T> | ApiErrorResponse;
 export interface TaskFilters {
   projectId?: string;
   sectionId?: string;
+  areaId?: string;
   labelId?: string;
   priority?: string;
   dueDate?: "today" | "upcoming" | "overdue";

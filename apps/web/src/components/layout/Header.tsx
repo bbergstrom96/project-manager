@@ -5,10 +5,11 @@ import { Button } from "@/components/ui/button";
 import { useUIStore } from "@/stores/uiStore";
 
 interface HeaderProps {
-  title: string;
+  title: React.ReactNode;
+  actions?: React.ReactNode;
 }
 
-export function Header({ title }: HeaderProps) {
+export function Header({ title, actions }: HeaderProps) {
   const { toggleSidebar } = useUIStore();
 
   return (
@@ -16,7 +17,8 @@ export function Header({ title }: HeaderProps) {
       <Button variant="ghost" size="icon" onClick={toggleSidebar}>
         <Menu className="h-5 w-5" />
       </Button>
-      <h1 className="text-lg font-semibold">{title}</h1>
+      <h1 className="text-lg font-semibold flex-1">{title}</h1>
+      {actions}
     </header>
   );
 }

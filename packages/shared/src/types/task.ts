@@ -12,6 +12,7 @@ export interface Task {
   order: number;
   projectId: string | null;
   sectionId: string | null;
+  areaId: string | null;
   parentId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -21,6 +22,7 @@ export interface TaskWithLabels extends Task {
   labels: { label: Label }[];
   project?: Project | null;
   section?: Section | null;
+  area?: Area | null;
 }
 
 export interface CreateTaskInput {
@@ -31,6 +33,7 @@ export interface CreateTaskInput {
   dueDateTime?: string;
   projectId?: string;
   sectionId?: string;
+  areaId?: string;
   parentId?: string;
   labelIds?: string[];
 }
@@ -43,6 +46,7 @@ export interface UpdateTaskInput {
   dueDateTime?: string | null;
   projectId?: string | null;
   sectionId?: string | null;
+  areaId?: string | null;
   parentId?: string | null;
   labelIds?: string[];
   order?: number;
@@ -52,3 +56,4 @@ export interface UpdateTaskInput {
 import type { Label } from "./label";
 import type { Project } from "./project";
 import type { Section } from "./project";
+import type { Area } from "./area";

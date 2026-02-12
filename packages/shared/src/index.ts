@@ -2,6 +2,7 @@
 export * from "./types/task";
 export * from "./types/project";
 export * from "./types/label";
+export * from "./types/area";
 export * from "./types/api";
 
 // Constants
@@ -12,3 +13,4 @@ export * from "./constants/colors";
 export * from "./validation/task";
 export * from "./validation/project";
 export * from "./validation/label";
+export * from "./validation/area";

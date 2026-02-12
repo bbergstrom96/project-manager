@@ -10,6 +10,7 @@ export const createTaskSchema = z.object({
   dueDateTime: z.string().datetime().optional(),
   projectId: z.string().cuid().optional(),
   sectionId: z.string().cuid().optional(),
+  areaId: z.string().cuid().optional(),
   parentId: z.string().cuid().optional(),
   labelIds: z.array(z.string().cuid()).optional(),
 });
@@ -22,6 +23,7 @@ export const updateTaskSchema = z.object({
   dueDateTime: z.string().datetime().nullable().optional(),
   projectId: z.string().cuid().nullable().optional(),
   sectionId: z.string().cuid().nullable().optional(),
+  areaId: z.string().cuid().nullable().optional(),
   parentId: z.string().cuid().nullable().optional(),
   labelIds: z.array(z.string().cuid()).optional(),
   order: z.number().int().min(0).optional(),

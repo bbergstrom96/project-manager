@@ -11,12 +11,21 @@ datasource db {
 // PROJECTS
 // ============================================
 model Project {
-  id         String    @id @default(cuid())
-  name       String
-  color      String    @default("#808080")
-  isFavorite Boolean   @default(false)
-  isArchived Boolean   @default(false)
-  order      Int       @default(0)
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  color       String    @default("#808080")
+  isFavorite  Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+  order       Int       @default(0)
+
+  // Week-based timeline (format: "M.W" e.g., "3.1" = March week 1)
+  startWeek   String?
+  endWeek     String?
+
+  // Link to Area for planning
+  areaId      String?
+  area        Area?     @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   tasks    Task[]
   sections Section[]
@@ -26,6 +35,7 @@ model Project {
 
   @@index([isArchived])
   @@index([order])
+  @@index([areaId])
 }
 
 // ============================================
@@ -69,6 +79,10 @@ model Task {
   sectionId String?
   section   Section? @relation(fields: [sectionId], references: [id], onDelete: SetNull)
 
+  // Direct area assignment (for tasks not in a project)
+  areaId    String?
+  area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+
   labels TaskLabel[]
 
   parentId String?
@@ -80,6 +94,7 @@ model Task {
 
   @@index([projectId])
   @@index([sectionId])
+  @@index([areaId])
   @@index([isCompleted])
   @@index([dueDate])
   @@index([priority])
@@ -120,6 +135,48 @@ model TaskLabel {
   @@id([taskId, labelId])
   @@index([taskId])
   @@index([labelId])
+}
+
+// ============================================
+// AREAS (life categories for planning)
+// ============================================
+model Area {
+  id        String  @id @default(cuid())
+  name      String
+  icon      String? // emoji or icon name
+  color     String  @default("#808080")
+  order     Int     @default(0)
+
+  goals    AreaGoal[]
+  projects Project[]
+  tasks    Task[]    // Direct tasks not in a project
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([order])
+}
+
+// ============================================
+// AREA GOALS (planning goals per time period)
+// ============================================
+model AreaGoal {
+  id        String @id @default(cuid())
+  areaId    String
+  area      Area   @relation(fields: [areaId], references: [id], onDelete: Cascade)
+
+  // Time period: "2026-3" for March 2026, "2026-3.2" for week 2 of March 2026
+  period    String
+
+  // Goals content (markdown/plain text with Projects and Habits)
+  content   String @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([areaId, period])
+  @@index([areaId])
+  @@index([period])
 }
 
 // ============================================

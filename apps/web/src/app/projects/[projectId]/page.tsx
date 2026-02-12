@@ -1,27 +1,50 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import { Plus } from "lucide-react";
+import { useParams, useRouter } from "next/navigation";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import { Header } from "@/components/layout/Header";
-import { TaskList } from "@/components/tasks/TaskList";
-import { TaskForm } from "@/components/tasks/TaskForm";
+import { ProjectDescription } from "@/components/projects/ProjectDescription";
+import { ProjectSections } from "@/components/sections/ProjectSections";
+import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { useProjectStore } from "@/stores/projectStore";
+import { useTaskStore } from "@/stores/taskStore";
 import { api } from "@/lib/api";
 import type { ProjectWithTasks } from "@proj-mgmt/shared";
 
 export default function ProjectPage() {
   const params = useParams();
+  const router = useRouter();
   const projectId = params.projectId as string;
+  const { deleteProject } = useProjectStore();
+  const { tasks, setFilters } = useTaskStore();
   const [project, setProject] = useState<ProjectWithTasks | null>(null);
-  const [showAddTask, setShowAddTask] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
     async function loadProject() {
       try {
-        const data = await api.projects.get(projectId);
-        setProject(data);
+        const projectData = await api.projects.get(projectId);
+        setProject(projectData);
       } catch (error) {
         console.error("Failed to load project:", error);
       } finally {
@@ -30,6 +53,10 @@ export default function ProjectPage() {
     }
     loadProject();
   }, [projectId]);
+
+  useEffect(() => {
+    setFilters({ projectId });
+  }, [projectId, setFilters]);
 
   if (isLoading) {
     return (
@@ -58,30 +85,79 @@ export default function ProjectPage() {
     );
   }
 
-  return (
-    <div className="h-full">
-      <Header title={project.name} />
-      <div className="p-6 max-w-3xl mx-auto">
-        <TaskList filters={{ projectId }} />
+  const handleDescriptionUpdate = (description: string | null) => {
+    setProject({ ...project, description });
+  };
 
-        {showAddTask ? (
-          <div className="mt-4">
-            <TaskForm
-              projectId={projectId}
-              onClose={() => setShowAddTask(false)}
-            />
-          </div>
-        ) : (
-          <Button
-            variant="ghost"
-            className="mt-4 w-full justify-start text-muted-foreground"
-            onClick={() => setShowAddTask(true)}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add task
-          </Button>
-        )}
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteProject(projectId);
+      router.push("/");
+    } catch (error) {
+      console.error("Failed to delete project:", error);
+      setIsDeleting(false);
+    }
+  };
+
+  const headerActions = (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon">
+          <MoreHorizontal className="h-5 w-5" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onClick={() => setShowDeleteDialog(true)}
+          className="text-destructive focus:text-destructive"
+        >
+          <Trash2 className="mr-2 h-4 w-4" />
+          Delete project
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  return (
+    <>
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete project</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete &quot;{project.name}&quot;? This will also delete all tasks in this project. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    <div className="h-full">
+      <Header title={project.name} actions={headerActions} />
+      <div className="p-6 max-w-3xl mx-auto space-y-6">
+        <CollapsibleSection title="Notes">
+          <ProjectDescription
+            projectId={projectId}
+            description={project.description}
+            onUpdate={handleDescriptionUpdate}
+          />
+        </CollapsibleSection>
+
+        <ProjectSections
+          projectId={projectId}
+          tasks={tasks}
+        />
       </div>
     </div>
+    </>
   );
 }

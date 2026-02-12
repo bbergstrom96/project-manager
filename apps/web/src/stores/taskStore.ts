@@ -5,11 +5,16 @@ import type { TaskWithLabels, CreateTaskInput, UpdateTaskInput, TaskFilters } fr
 interface TaskState {
   tasks: TaskWithLabels[];
   isLoading: boolean;
+  isInitialized: boolean;
   error: string | null;
   filters: TaskFilters;
+  lastFetchedFiltersKey: string;
 
   setFilters: (filters: TaskFilters) => void;
-  fetchTasks: () => Promise<void>;
+  setTasks: (tasks: TaskWithLabels[]) => void;
+  setTask: (task: TaskWithLabels) => void;
+  invalidate: () => void;
+  fetchTasks: (force?: boolean) => Promise<void>;
   addTask: (data: CreateTaskInput) => Promise<TaskWithLabels>;
   updateTask: (id: string, data: UpdateTaskInput) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
@@ -20,21 +25,53 @@ interface TaskState {
 export const useTaskStore = create<TaskState>((set, get) => ({
   tasks: [],
   isLoading: false,
+  isInitialized: false,
   error: null,
   filters: {},
+  lastFetchedFiltersKey: "",
 
   setFilters: (filters) => {
+    const newKey = JSON.stringify(filters);
+    const currentKey = get().lastFetchedFiltersKey;
+
+    // Skip if already fetched with same filters
+    if (newKey === currentKey && get().isInitialized) {
+      return;
+    }
+
     set({ filters });
     get().fetchTasks();
   },
 
-  fetchTasks: async () => {
+  setTasks: (tasks) => {
+    set({ tasks });
+  },
+
+  setTask: (task) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) => (t.id === task.id ? task : t)),
+    }));
+  },
+
+  invalidate: () => {
+    set({ lastFetchedFiltersKey: "", isInitialized: false });
+  },
+
+  fetchTasks: async (force = false) => {
+    const currentFilters = get().filters;
+    const filtersKey = JSON.stringify(currentFilters);
+
+    // Skip if already fetched with same filters (unless forced)
+    if (!force && filtersKey === get().lastFetchedFiltersKey && get().isInitialized) {
+      return;
+    }
+
     set({ isLoading: true, error: null });
     try {
-      const tasks = await api.tasks.list(get().filters);
-      set({ tasks, isLoading: false });
+      const tasks = await api.tasks.list(currentFilters);
+      set({ tasks, isLoading: false, isInitialized: true, lastFetchedFiltersKey: filtersKey });
     } catch (error) {
-      set({ error: (error as Error).message, isLoading: false });
+      set({ error: (error as Error).message, isLoading: false, isInitialized: true });
     }
   },
 
@@ -74,7 +111,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     try {
       await api.tasks.complete(id);
-    } catch (error) {
+    } catch (error: any) {
+      // If task is already gone, that's fine
+      if (error?.code === "NOT_FOUND") {
+        return;
+      }
       set({ tasks: previousTasks, error: (error as Error).message });
       throw error;
     }
@@ -98,7 +139,11 @@ export const useTaskStore = create<TaskState>((set, get) => ({
 
     try {
       await api.tasks.delete(id);
-    } catch (error) {
+    } catch (error: any) {
+      // If task is already gone (NOT_FOUND), that's fine - mission accomplished
+      if (error?.code === "NOT_FOUND") {
+        return;
+      }
       set({ tasks: previousTasks, error: (error as Error).message });
       throw error;
     }

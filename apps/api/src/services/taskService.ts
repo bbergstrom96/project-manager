@@ -11,12 +11,14 @@ const taskInclude = {
   },
   project: true,
   section: true,
+  area: true,
 };
 
 export class TaskService {
   async findAll(filters: {
     projectId?: string;
     sectionId?: string;
+    areaId?: string;
     labelId?: string;
     priority?: string;
     dueDate?: "today" | "upcoming" | "overdue";
@@ -33,6 +35,10 @@ export class TaskService {
 
     if (filters.sectionId) {
       where.sectionId = filters.sectionId;
+    }
+
+    if (filters.areaId) {
+      where.areaId = filters.areaId;
     }
 
     if (filters.labelId) {

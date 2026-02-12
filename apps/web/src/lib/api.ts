@@ -7,10 +7,18 @@ import type {
   ProjectWithTasks,
   CreateProjectInput,
   UpdateProjectInput,
+  Section,
+  CreateSectionInput,
+  UpdateSectionInput,
   Label,
   CreateLabelInput,
   UpdateLabelInput,
   TaskFilters,
+  Area,
+  AreaGoal,
+  CreateAreaInput,
+  UpdateAreaInput,
+  UpdateAreaGoalInput,
 } from "@proj-mgmt/shared";
 
 const API_BASE =
@@ -38,7 +46,16 @@ async function request<T>(
     ...options,
   });
 
-  const data = (await response.json()) as ApiResponse<T>;
+  // Handle empty responses (e.g., 204 No Content or empty body)
+  const text = await response.text();
+  if (!text) {
+    if (response.ok) {
+      return undefined as T;
+    }
+    throw new ApiError("UNKNOWN_ERROR", "Empty response from server");
+  }
+
+  const data = JSON.parse(text) as ApiResponse<T>;
 
   if (!data.success) {
     throw new ApiError(
@@ -69,6 +86,7 @@ export const api = {
         `/tasks${buildQueryString({
           project_id: filters?.projectId,
           section_id: filters?.sectionId,
+          area_id: filters?.areaId,
           label_id: filters?.labelId,
           priority: filters?.priority,
           due_date: filters?.dueDate,
@@ -121,6 +139,11 @@ export const api = {
       request<Project>(`/projects/${id}/unarchive`, { method: "POST" }),
     delete: (id: string) =>
       request<void>(`/projects/${id}`, { method: "DELETE" }),
+    reorder: (orderedIds: string[]) =>
+      request<void>("/projects/reorder", {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
   },
 
   labels: {
@@ -138,5 +161,53 @@ export const api = {
       }),
     delete: (id: string) =>
       request<void>(`/labels/${id}`, { method: "DELETE" }),
+  },
+
+  sections: {
+    list: (projectId: string) =>
+      request<Section[]>(`/projects/${projectId}/sections`),
+    create: (projectId: string, data: Omit<CreateSectionInput, "projectId">) =>
+      request<Section>(`/projects/${projectId}/sections`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdateSectionInput) =>
+      request<Section>(`/sections/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/sections/${id}`, { method: "DELETE" }),
+    reorder: (orderedIds: string[]) =>
+      request<void>("/sections/reorder", {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
+  },
+
+  areas: {
+    list: () => request<Area[]>("/areas"),
+    get: (id: string) => request<Area & { goals: AreaGoal[] }>(`/areas/${id}`),
+    create: (data: CreateAreaInput) =>
+      request<Area>("/areas", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdateAreaInput) =>
+      request<Area>(`/areas/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/areas/${id}`, { method: "DELETE" }),
+    upsertGoal: (areaId: string, period: string, data: UpdateAreaGoalInput) =>
+      request<AreaGoal>(`/areas/${areaId}/goals/${period}`, {
+        method: "PUT",
+        body: JSON.stringify(data),
+      }),
+    getGoalsForPeriods: (periods: string[]) =>
+      request<Record<string, Record<string, string>>>(
+        `/areas/goals?periods=${periods.join(",")}`
+      ),
   },
 };

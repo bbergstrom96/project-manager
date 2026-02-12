@@ -17,12 +17,14 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const bgColor = { backgroundColor: '#1b1e25' };
+
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <div className="flex h-screen overflow-hidden">
+    <html lang="en" className="dark" style={bgColor}>
+      <body className={inter.className} style={bgColor}>
+        <div className="flex h-screen overflow-hidden" style={bgColor}>
           <Sidebar />
-          <main className="flex-1 overflow-y-auto">{children}</main>
+          <main className="flex-1 overflow-y-auto" style={bgColor}>{children}</main>
         </div>
         <AddTaskDialog />
         <Toaster position="bottom-right" />

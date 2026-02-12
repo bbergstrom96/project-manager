@@ -4,16 +4,24 @@ const hexColorRegex = /^#[0-9A-Fa-f]{6}$/;
 
 export const createProjectSchema = z.object({
   name: z.string().min(1, "Project name is required").max(100),
+  description: z.string().max(50000).optional(),
   color: z.string().regex(hexColorRegex, "Invalid color format").optional(),
   isFavorite: z.boolean().optional().default(false),
+  areaId: z.string().cuid().optional(),
+  startWeek: z.string().optional(),
+  endWeek: z.string().optional(),
 });
 
 export const updateProjectSchema = z.object({
   name: z.string().min(1).max(100).optional(),
+  description: z.string().max(50000).nullable().optional(),
   color: z.string().regex(hexColorRegex).optional(),
   isFavorite: z.boolean().optional(),
   isArchived: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
+  areaId: z.string().cuid().nullable().optional(),
+  startWeek: z.string().nullable().optional(),
+  endWeek: z.string().nullable().optional(),
 });
 
 export const createSectionSchema = z.object({
