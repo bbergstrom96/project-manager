@@ -99,7 +99,7 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
         {...dragProps}
         className={cn(
           "group flex items-start gap-2 border-b py-1.5 px-2 hover:bg-muted/50 rounded-md transition-colors",
-          isDragging && "opacity-50 bg-muted/50",
+          isDragging && "opacity-0",
           !disableDrag && "cursor-grab active:cursor-grabbing"
         )}
         onMouseEnter={() => setIsHovered(true)}
