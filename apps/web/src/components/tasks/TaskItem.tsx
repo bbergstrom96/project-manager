@@ -13,6 +13,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
 import { useTaskStore } from "@/stores/taskStore";
 import { RichTextContent } from "@/components/ui/rich-text-editor";
 import { TaskEditPopover } from "./TaskEditPopover";
@@ -48,9 +54,10 @@ interface TaskItemProps {
 }
 
 export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggingProp, disableDrag }: TaskItemProps) {
-  const { completeTask, deleteTask, setTask } = useTaskStore();
+  const { completeTask, deleteTask, setTask, updateTask } = useTaskStore();
   const [isHovered, setIsHovered] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
+  const [isCalendarOpen, setIsCalendarOpen] = useState(false);
 
   const {
     attributes,
@@ -81,6 +88,13 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
 
   const handleUpdate = (updatedTask: TaskWithLabels) => {
     setTask(updatedTask);
+  };
+
+  const handleDateSelect = async (date: Date | undefined) => {
+    await updateTask(task.id, {
+      dueDate: date ? date.toISOString() : null
+    });
+    setIsCalendarOpen(false);
   };
 
   const dueDate = task.dueDate ? formatDueDate(new Date(task.dueDate)) : null;
@@ -150,7 +164,7 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
         )}
 
         <div
-          className={cn("flex items-center gap-1", !isHovered && "opacity-0")}
+          className={cn("flex items-center gap-1", !isHovered && !isCalendarOpen && "opacity-0")}
           onClick={(e) => e.stopPropagation()}
         >
           {task.priority !== "P4" && (
@@ -159,6 +173,20 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
               fill="currentColor"
             />
           )}
+          <Popover open={isCalendarOpen} onOpenChange={setIsCalendarOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <CalendarIcon className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0 bg-[#1e1e1e] border-[#3d3d3d]" align="end">
+              <DatePicker
+                date={task.dueDate ? new Date(task.dueDate) : undefined}
+                onSelect={handleDateSelect}
+                onClose={() => setIsCalendarOpen(false)}
+              />
+            </PopoverContent>
+          </Popover>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="h-8 w-8">
