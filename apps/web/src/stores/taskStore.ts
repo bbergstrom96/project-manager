@@ -20,6 +20,7 @@ interface TaskState {
   completeTask: (id: string) => Promise<void>;
   reopenTask: (id: string) => Promise<void>;
   deleteTask: (id: string) => Promise<void>;
+  reorderTasks: (orderedIds: string[]) => Promise<void>;
 }
 
 export const useTaskStore = create<TaskState>((set, get) => ({
@@ -144,6 +145,27 @@ export const useTaskStore = create<TaskState>((set, get) => ({
       if (error?.code === "NOT_FOUND") {
         return;
       }
+      set({ tasks: previousTasks, error: (error as Error).message });
+      throw error;
+    }
+  },
+
+  reorderTasks: async (orderedIds) => {
+    // Optimistic update - reorder tasks in state
+    const previousTasks = get().tasks;
+    const taskMap = new Map(previousTasks.map((t) => [t.id, t]));
+    const reorderedTasks = orderedIds
+      .map((id) => taskMap.get(id))
+      .filter((t): t is TaskWithLabels => t !== undefined);
+
+    // Keep any tasks not in orderedIds at the end
+    const otherTasks = previousTasks.filter((t) => !orderedIds.includes(t.id));
+
+    set({ tasks: [...reorderedTasks, ...otherTasks] });
+
+    try {
+      await api.tasks.reorder(orderedIds);
+    } catch (error) {
       set({ tasks: previousTasks, error: (error as Error).message });
       throw error;
     }

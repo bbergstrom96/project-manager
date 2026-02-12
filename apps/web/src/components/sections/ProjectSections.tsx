@@ -30,9 +30,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { TaskItem } from "@/components/tasks/TaskItem";
+import { TaskItem, TaskItemOverlay } from "@/components/tasks/TaskItem";
 import { TaskForm } from "@/components/tasks/TaskForm";
 import { useSectionStore } from "@/stores/sectionStore";
+import { useTaskStore } from "@/stores/taskStore";
 import type { Section, TaskWithLabels } from "@proj-mgmt/shared";
 
 interface SectionItemProps {
@@ -47,6 +48,45 @@ interface SectionItemProps {
 
 function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isDraggingProp, isReorderMode, onRegisterRef }: SectionItemProps) {
   const { updateSection, deleteSection } = useSectionStore();
+  const { reorderTasks } = useTaskStore();
+  const [activeTask, setActiveTask] = useState<TaskWithLabels | null>(null);
+
+  const taskSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleTaskDragStart = (event: DragStartEvent) => {
+    const task = tasks.find((t) => t.id === event.active.id);
+    if (task) {
+      setActiveTask(task);
+    }
+  };
+
+  const handleTaskDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = tasks.findIndex((t) => t.id === active.id);
+    const newIndex = tasks.findIndex((t) => t.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
+      await reorderTasks(reorderedTasks.map((t) => t.id));
+    }
+  };
+
+  const handleTaskDragCancel = () => {
+    setActiveTask(null);
+  };
   const [isOpen, setIsOpen] = useState(true);
   const [showAddTask, setShowAddTask] = useState(false);
   const [hasOpenedForm, setHasOpenedForm] = useState(false);
@@ -196,13 +236,31 @@ function SectionItem({ section, tasks, projectId, onTaskCreated, isDragging: isD
       {/* Tasks - hidden in reorder mode */}
       {showContent && (
         <div className="pl-6">
-          {tasks.length > 0 && (
-            <div className="divide-y">
-              {tasks.map((task) => (
-                <TaskItem key={task.id} task={task} hideProject />
-              ))}
-            </div>
-          )}
+          <DndContext
+            sensors={taskSensors}
+            collisionDetection={closestCorners}
+            onDragStart={handleTaskDragStart}
+            onDragEnd={handleTaskDragEnd}
+            onDragCancel={handleTaskDragCancel}
+          >
+            <SortableContext
+              items={tasks.map((t) => t.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {tasks.length > 0 && (
+                <div className="divide-y">
+                  {tasks.map((task) => (
+                    <TaskItem key={task.id} task={task} hideProject />
+                  ))}
+                </div>
+              )}
+            </SortableContext>
+            <DragOverlay>
+              {activeTask ? (
+                <TaskItemOverlay task={activeTask} hideProject />
+              ) : null}
+            </DragOverlay>
+          </DndContext>
 
           {/* Add task form/button */}
           <div className="mt-2">
@@ -261,9 +319,22 @@ interface UnsectionedTasksProps {
 }
 
 function UnsectionedTasks({ tasks, projectId, onTaskCreated }: UnsectionedTasksProps) {
+  const { reorderTasks } = useTaskStore();
   const [showAddTask, setShowAddTask] = useState(false);
   const [hasOpenedForm, setHasOpenedForm] = useState(false);
+  const [activeTask, setActiveTask] = useState<TaskWithLabels | null>(null);
   const formKey = useRef(0);
+
+  const taskSensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
 
   const handleOpenForm = () => {
     formKey.current += 1;
@@ -271,17 +342,61 @@ function UnsectionedTasks({ tasks, projectId, onTaskCreated }: UnsectionedTasksP
     setShowAddTask(true);
   };
 
+  const handleTaskDragStart = (event: DragStartEvent) => {
+    const task = tasks.find((t) => t.id === event.active.id);
+    if (task) {
+      setActiveTask(task);
+    }
+  };
+
+  const handleTaskDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveTask(null);
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = tasks.findIndex((t) => t.id === active.id);
+    const newIndex = tasks.findIndex((t) => t.id === over.id);
+
+    if (oldIndex !== -1 && newIndex !== -1) {
+      const reorderedTasks = arrayMove(tasks, oldIndex, newIndex);
+      await reorderTasks(reorderedTasks.map((t) => t.id));
+    }
+  };
+
+  const handleTaskDragCancel = () => {
+    setActiveTask(null);
+  };
+
   // If there are no unsectioned tasks and no sections exist yet, show nothing special
   // But we still want the add task button
   return (
     <div className="mb-4">
-      {tasks.length > 0 && (
-        <div className="divide-y">
-          {tasks.map((task) => (
-            <TaskItem key={task.id} task={task} hideProject />
-          ))}
-        </div>
-      )}
+      <DndContext
+        sensors={taskSensors}
+        collisionDetection={closestCorners}
+        onDragStart={handleTaskDragStart}
+        onDragEnd={handleTaskDragEnd}
+        onDragCancel={handleTaskDragCancel}
+      >
+        <SortableContext
+          items={tasks.map((t) => t.id)}
+          strategy={verticalListSortingStrategy}
+        >
+          {tasks.length > 0 && (
+            <div className="divide-y">
+              {tasks.map((task) => (
+                <TaskItem key={task.id} task={task} hideProject />
+              ))}
+            </div>
+          )}
+        </SortableContext>
+        <DragOverlay>
+          {activeTask ? (
+            <TaskItemOverlay task={activeTask} hideProject />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       {/* Add task form/button for unsectioned tasks */}
       <div className="mt-2">

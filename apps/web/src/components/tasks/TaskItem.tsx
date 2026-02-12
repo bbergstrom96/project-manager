@@ -4,7 +4,7 @@ import { useState } from "react";
 import { format, isToday, isTomorrow, isPast } from "date-fns";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { Flag, MoreHorizontal, Trash2, Calendar as CalendarIcon, GripVertical } from "lucide-react";
+import { Flag, MoreHorizontal, Trash2, Calendar as CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -44,9 +44,10 @@ interface TaskItemProps {
   hideProject?: boolean;
   hideDueDate?: boolean;
   isDragging?: boolean;
+  disableDrag?: boolean;
 }
 
-export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggingProp }: TaskItemProps) {
+export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggingProp, disableDrag }: TaskItemProps) {
   const { completeTask, deleteTask, setTask } = useTaskStore();
   const [isHovered, setIsHovered] = useState(false);
   const [isPopoverOpen, setIsPopoverOpen] = useState(false);
@@ -58,7 +59,7 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
     transform,
     transition,
     isDragging: isDraggingSortable,
-  } = useSortable({ id: task.id });
+  } = useSortable({ id: task.id, disabled: disableDrag });
 
   const isDragging = isDraggingProp || isDraggingSortable;
 
@@ -66,6 +67,9 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
     transform: CSS.Transform.toString(transform),
     transition,
   };
+
+  // Only apply drag listeners if dragging is enabled
+  const dragProps = disableDrag ? {} : { ...attributes, ...listeners };
 
   const handleComplete = async () => {
     await completeTask(task.id);
@@ -92,26 +96,15 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
       <div
         ref={setNodeRef}
         style={style}
+        {...dragProps}
         className={cn(
-          "group flex items-start gap-2 border-b py-1.5 px-2 hover:bg-muted/50 rounded-md transition-colors cursor-pointer",
-          isDragging && "opacity-50 bg-muted/50"
+          "group flex items-start gap-2 border-b py-1.5 px-2 hover:bg-muted/50 rounded-md transition-colors",
+          isDragging && "opacity-50 bg-muted/50",
+          !disableDrag && "cursor-grab active:cursor-grabbing"
         )}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Drag handle */}
-        <button
-          {...attributes}
-          {...listeners}
-          className={cn(
-            "p-0.5 rounded hover:bg-muted cursor-grab active:cursor-grabbing touch-none",
-            !isHovered && "opacity-0"
-          )}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <GripVertical className="h-4 w-4 text-muted-foreground" />
-        </button>
-
         <button
           onClick={(e) => {
             e.stopPropagation();
@@ -194,11 +187,6 @@ export function TaskItemOverlay({ task, hideProject }: { task: TaskWithLabels; h
 
   return (
     <div className="flex items-start gap-2 border-b py-1.5 px-2 bg-[#2d2d2d] rounded-md shadow-2xl border border-[#3d3d3d]">
-      {/* Drag handle placeholder */}
-      <div className="p-0.5">
-        <GripVertical className="h-4 w-4 text-muted-foreground" />
-      </div>
-
       <div
         className={cn(
           "h-[18px] w-[18px] flex-shrink-0 rounded-full border-2",
