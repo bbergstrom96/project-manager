@@ -2,12 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { MoreHorizontal, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2, ListTodo, StickyNote } from "lucide-react";
 import { Header } from "@/components/layout/Header";
 import { ProjectDescription } from "@/components/projects/ProjectDescription";
 import { ProjectSections } from "@/components/sections/ProjectSections";
-import { CollapsibleSection } from "@/components/ui/collapsible-section";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -39,6 +39,7 @@ export default function ProjectPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
 
   useEffect(() => {
     async function loadProject() {
@@ -141,21 +142,84 @@ export default function ProjectPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    <div className="h-full">
+    <div className="h-full flex flex-col">
       <Header title={project.name} actions={headerActions} />
-      <div className="p-6 max-w-3xl mx-auto space-y-6">
-        <CollapsibleSection title="Notes">
-          <ProjectDescription
-            projectId={projectId}
-            description={project.description}
-            onUpdate={handleDescriptionUpdate}
-          />
-        </CollapsibleSection>
 
-        <ProjectSections
-          projectId={projectId}
-          tasks={tasks}
-        />
+      {/* Mobile tabs - only visible on small screens */}
+      <div className="lg:hidden border-b px-4">
+        <div className="flex gap-1">
+          <button
+            onClick={() => setActiveTab("tasks")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+              activeTab === "tasks"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <ListTodo className="h-4 w-4" />
+            Tasks
+          </button>
+          <button
+            onClick={() => setActiveTab("notes")}
+            className={cn(
+              "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors",
+              activeTab === "notes"
+                ? "border-primary text-foreground"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            )}
+          >
+            <StickyNote className="h-4 w-4" />
+            Notes
+          </button>
+        </div>
+      </div>
+
+      {/* Content area */}
+      <div className="flex-1 overflow-auto">
+        {/* Desktop: side by side layout */}
+        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-6 p-6 h-full">
+          {/* Tasks column */}
+          <div className="overflow-auto">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center gap-2">
+              <ListTodo className="h-4 w-4" />
+              Tasks
+            </h2>
+            <ProjectSections
+              projectId={projectId}
+              tasks={tasks}
+            />
+          </div>
+
+          {/* Notes column */}
+          <div className="overflow-auto">
+            <h2 className="text-sm font-semibold text-muted-foreground mb-4 flex items-center gap-2">
+              <StickyNote className="h-4 w-4" />
+              Notes
+            </h2>
+            <ProjectDescription
+              projectId={projectId}
+              description={project.description}
+              onUpdate={handleDescriptionUpdate}
+            />
+          </div>
+        </div>
+
+        {/* Mobile: tabbed content */}
+        <div className="lg:hidden p-4">
+          {activeTab === "tasks" ? (
+            <ProjectSections
+              projectId={projectId}
+              tasks={tasks}
+            />
+          ) : (
+            <ProjectDescription
+              projectId={projectId}
+              description={project.description}
+              onUpdate={handleDescriptionUpdate}
+            />
+          )}
+        </div>
       </div>
     </div>
     </>
