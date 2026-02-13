@@ -176,7 +176,7 @@ function ProjectNavItem({ project, areaColor, onEdit, onDelete, onSchedule, onUn
       {...attributes}
       {...listeners}
       className={cn(
-        "group/project flex items-center cursor-grab active:cursor-grabbing px-2 py-0.5",
+        "group/project flex items-baseline cursor-grab active:cursor-grabbing px-2 py-0.5",
         isDragging && "opacity-50"
       )}
     >
@@ -188,19 +188,19 @@ function ProjectNavItem({ project, areaColor, onEdit, onDelete, onSchedule, onUn
           }
         }}
         className={cn(
-          "flex items-center gap-1.5 rounded py-0.5 text-sm transition-colors flex-1 min-w-0",
+          "flex items-baseline gap-1.5 rounded py-0.5 text-sm transition-colors flex-1 min-w-0",
           isActive
             ? "text-accent-foreground"
             : "text-muted-foreground hover:text-foreground"
         )}
       >
-        <FolderKanban className="h-3.5 w-3.5 flex-shrink-0 self-start mt-0.5" style={{ color: iconColor }} />
+        <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" style={{ color: iconColor }} />
         <span className="flex-1">{project.name}</span>
       </Link>
       {/* Schedule: show weeks (click to unschedule) OR calendar button (click to schedule) */}
       {isScheduled ? (
         <button
-          className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap flex-shrink-0 px-1 rounded hover:bg-muted/50 self-start mt-0.5"
+          className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap flex-shrink-0 px-1 rounded hover:bg-muted/50"
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();
@@ -212,7 +212,7 @@ function ProjectNavItem({ project, areaColor, onEdit, onDelete, onSchedule, onUn
         </button>
       ) : (
         <button
-          className="h-5 w-5 flex items-center justify-center flex-shrink-0 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 self-start"
+          className="h-5 w-5 flex items-center justify-center flex-shrink-0 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50"
           onClick={(e) => {
             e.stopPropagation();
             e.preventDefault();

@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { MoreHorizontal, Trash2, ListTodo, StickyNote } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { Header } from "@/components/layout/Header";
 import { ProjectDescription } from "@/components/projects/ProjectDescription";
 import { ProjectSections } from "@/components/sections/ProjectSections";
@@ -33,13 +34,16 @@ export default function ProjectPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = params.projectId as string;
-  const { deleteProject } = useProjectStore();
+  const { deleteProject, updateProject } = useProjectStore();
   const { tasks, setFilters } = useTaskStore();
   const [project, setProject] = useState<ProjectWithTasks | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [activeTab, setActiveTab] = useState<"tasks" | "notes">("tasks");
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [titleValue, setTitleValue] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     async function loadProject() {
@@ -101,6 +105,52 @@ export default function ProjectPage() {
     }
   };
 
+  const handleStartEditTitle = () => {
+    setTitleValue(project.name);
+    setIsEditingTitle(true);
+    setTimeout(() => titleInputRef.current?.select(), 0);
+  };
+
+  const handleSaveTitle = async () => {
+    const trimmed = titleValue.trim();
+    if (trimmed && trimmed !== project.name) {
+      await updateProject(projectId, { name: trimmed });
+      setProject({ ...project, name: trimmed });
+    }
+    setIsEditingTitle(false);
+  };
+
+  const handleCancelEditTitle = () => {
+    setIsEditingTitle(false);
+    setTitleValue(project.name);
+  };
+
+  const editableTitle = isEditingTitle ? (
+    <Input
+      ref={titleInputRef}
+      value={titleValue}
+      onChange={(e) => setTitleValue(e.target.value)}
+      onBlur={handleSaveTitle}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          e.preventDefault();
+          handleSaveTitle();
+        } else if (e.key === "Escape") {
+          handleCancelEditTitle();
+        }
+      }}
+      className="text-lg font-semibold h-auto py-0 px-1 border-none focus-visible:ring-1"
+      autoFocus
+    />
+  ) : (
+    <span
+      onClick={handleStartEditTitle}
+      className="cursor-text hover:bg-muted/50 px-1 py-0.5 rounded -mx-1"
+    >
+      {project.name}
+    </span>
+  );
+
   const headerActions = (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -143,7 +193,7 @@ export default function ProjectPage() {
         </AlertDialogContent>
       </AlertDialog>
     <div className="h-full flex flex-col">
-      <Header title={project.name} actions={headerActions} />
+      <Header title={editableTitle} actions={headerActions} />
 
       {/* Mobile tabs - only visible on small screens */}
       <div className="lg:hidden border-b px-4">

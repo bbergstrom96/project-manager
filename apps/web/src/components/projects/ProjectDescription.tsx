@@ -33,9 +33,10 @@ export function ProjectDescription({
       attributes: {
         class: cn(
           "prose prose-sm max-w-none focus:outline-none min-h-[40px] prose-invert",
-          "prose-h1:text-[#e05555] prose-h1:font-semibold prose-h1:mb-1 prose-h1:mt-3 first:prose-h1:mt-0",
-          "prose-h2:text-[#e0a555] prose-h2:font-semibold prose-h2:mb-1 prose-h2:mt-3 first:prose-h2:mt-0",
-          "prose-h3:text-[#55b5e0] prose-h3:font-semibold prose-h3:mb-1 prose-h3:mt-3 first:prose-h3:mt-0",
+          "prose-h1:text-white prose-h1:font-semibold prose-h1:mb-1 prose-h1:mt-3 first:prose-h1:mt-0",
+          "prose-h2:text-[#e05555] prose-h2:font-semibold prose-h2:mb-1 prose-h2:mt-3 first:prose-h2:mt-0",
+          "prose-h3:text-[#e0a555] prose-h3:font-semibold prose-h3:mb-1 prose-h3:mt-3 first:prose-h3:mt-0",
+          "prose-h4:text-[#e0e055] prose-h4:font-semibold prose-h4:mb-1 prose-h4:mt-3 first:prose-h4:mt-0",
           "prose-p:text-foreground prose-p:leading-normal prose-p:my-1",
           "prose-ul:text-foreground prose-ol:text-foreground prose-ul:my-1 prose-ol:my-1",
           "prose-li:my-0",
