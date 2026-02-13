@@ -34,6 +34,7 @@ import {
   ChevronRight,
   FolderKanban,
   GanttChart,
+  ListChecks,
   MoreHorizontal,
   Pencil,
   Trash2,
@@ -683,6 +684,11 @@ export function Sidebar() {
 
       <nav className="flex-1 space-y-1 overflow-y-auto px-2">
         <NavItem href="/" icon={<Inbox className="h-4 w-4" />} label="Inbox" />
+        <NavItem
+          href="/routines"
+          icon={<ListChecks className="h-4 w-4" />}
+          label="Routines"
+        />
         <NavItem
           href="/today"
           icon={<Calendar className="h-4 w-4" />}

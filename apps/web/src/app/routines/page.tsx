@@ -1,0 +1,595 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { Plus, ChevronDown, ChevronRight, MoreHorizontal, Trash2, Pencil } from "lucide-react";
+import { Header } from "@/components/layout/Header";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { cn } from "@/lib/utils";
+import { useRoutineStore } from "@/stores/routineStore";
+import type { RoutineWithSections, RoutineItemWithCompletion } from "@proj-mgmt/shared";
+
+export default function RoutinesPage() {
+  const {
+    routines,
+    isLoading,
+    fetchRoutines,
+    addRoutine,
+    updateRoutine,
+    deleteRoutine,
+    addSection,
+    updateSection,
+    deleteSection,
+    addItem,
+    updateItem,
+    deleteItem,
+    completeItem,
+    uncompleteItem,
+  } = useRoutineStore();
+
+  const [expandedRoutines, setExpandedRoutines] = useState<Set<string>>(new Set());
+  const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
+  const [addRoutineOpen, setAddRoutineOpen] = useState(false);
+  const [newRoutineName, setNewRoutineName] = useState("");
+  const [editingRoutine, setEditingRoutine] = useState<RoutineWithSections | null>(null);
+  const [editRoutineName, setEditRoutineName] = useState("");
+  const [deleteRoutineId, setDeleteRoutineId] = useState<string | null>(null);
+  const [addingSectionTo, setAddingSectionTo] = useState<string | null>(null);
+  const [newSectionName, setNewSectionName] = useState("");
+  const [addingItemTo, setAddingItemTo] = useState<string | null>(null);
+  const [newItemName, setNewItemName] = useState("");
+  const [addingSubItemTo, setAddingSubItemTo] = useState<{ sectionId: string; parentId: string } | null>(null);
+  const [newSubItemName, setNewSubItemName] = useState("");
+
+  useEffect(() => {
+    fetchRoutines();
+  }, [fetchRoutines]);
+
+  // Expand all routines by default
+  useEffect(() => {
+    if (routines.length > 0 && expandedRoutines.size === 0) {
+      setExpandedRoutines(new Set(routines.map((r) => r.id)));
+      const allSectionIds = routines.flatMap((r) => r.sections.map((s) => s.id));
+      setExpandedSections(new Set(allSectionIds));
+    }
+  }, [routines, expandedRoutines.size]);
+
+  const toggleRoutine = (id: string) => {
+    setExpandedRoutines((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const toggleSection = (id: string) => {
+    setExpandedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const handleAddRoutine = async () => {
+    if (!newRoutineName.trim()) return;
+    await addRoutine({ name: newRoutineName.trim() });
+    setNewRoutineName("");
+    setAddRoutineOpen(false);
+  };
+
+  const handleEditRoutine = async () => {
+    if (!editingRoutine || !editRoutineName.trim()) return;
+    await updateRoutine(editingRoutine.id, { name: editRoutineName.trim() });
+    setEditingRoutine(null);
+    setEditRoutineName("");
+  };
+
+  const handleDeleteRoutine = async () => {
+    if (!deleteRoutineId) return;
+    await deleteRoutine(deleteRoutineId);
+    setDeleteRoutineId(null);
+  };
+
+  const handleAddSection = async (routineId: string) => {
+    if (!newSectionName.trim()) return;
+    await addSection(routineId, { name: newSectionName.trim() });
+    setNewSectionName("");
+    setAddingSectionTo(null);
+  };
+
+  const handleAddItem = async (sectionId: string) => {
+    if (!newItemName.trim()) return;
+    await addItem(sectionId, { name: newItemName.trim() });
+    setNewItemName("");
+    setAddingItemTo(null);
+  };
+
+  const handleAddSubItem = async () => {
+    if (!addingSubItemTo || !newSubItemName.trim()) return;
+    await addItem(addingSubItemTo.sectionId, {
+      name: newSubItemName.trim(),
+      parentId: addingSubItemTo.parentId,
+    });
+    setNewSubItemName("");
+    setAddingSubItemTo(null);
+  };
+
+  const handleToggleItem = async (item: RoutineItemWithCompletion) => {
+    if (item.isCompleted) {
+      await uncompleteItem(item.id);
+    } else {
+      await completeItem(item.id);
+    }
+  };
+
+  const getCompletionStats = (routine: RoutineWithSections) => {
+    let total = 0;
+    let completed = 0;
+    routine.sections.forEach((section) => {
+      section.items.forEach((item) => {
+        total++;
+        if (item.isCompleted) completed++;
+        item.subItems?.forEach((sub) => {
+          total++;
+          if (sub.isCompleted) completed++;
+        });
+      });
+    });
+    return { total, completed };
+  };
+
+  if (isLoading && routines.length === 0) {
+    return (
+      <div className="h-full">
+        <Header title="Routines" />
+        <div className="p-6">
+          <div className="animate-pulse space-y-4">
+            <div className="h-6 w-48 bg-muted rounded" />
+            <div className="h-4 w-32 bg-muted rounded" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full">
+      <Header
+        title="Routines"
+        actions={
+          <Button variant="outline" size="sm" onClick={() => setAddRoutineOpen(true)}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Routine
+          </Button>
+        }
+      />
+
+      <div className="p-6 max-w-4xl mx-auto space-y-4">
+        {routines.length === 0 ? (
+          <div className="text-center py-12">
+            <p className="text-muted-foreground mb-4">No routines yet</p>
+            <Button onClick={() => setAddRoutineOpen(true)}>
+              <Plus className="h-4 w-4 mr-2" />
+              Create your first routine
+            </Button>
+          </div>
+        ) : (
+          routines.map((routine) => {
+            const isExpanded = expandedRoutines.has(routine.id);
+            const stats = getCompletionStats(routine);
+
+            return (
+              <div
+                key={routine.id}
+                className="border rounded-lg overflow-hidden"
+                style={{ borderColor: routine.color }}
+              >
+                {/* Routine Header */}
+                <div
+                  className="flex items-center gap-2 px-4 py-3 bg-muted/30 cursor-pointer"
+                  onClick={() => toggleRoutine(routine.id)}
+                >
+                  <button className="text-muted-foreground">
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4" />
+                    )}
+                  </button>
+                  {routine.icon && <span>{routine.icon}</span>}
+                  <span className="font-semibold flex-1" style={{ color: routine.color }}>
+                    {routine.name}
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {stats.completed}/{stats.total}
+                  </span>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                      <Button variant="ghost" size="icon" className="h-7 w-7">
+                        <MoreHorizontal className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setEditingRoutine(routine);
+                          setEditRoutineName(routine.name);
+                        }}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAddingSectionTo(routine.id);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Section
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setDeleteRoutineId(routine.id);
+                        }}
+                        className="text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+
+                {/* Sections */}
+                {isExpanded && (
+                  <div className="divide-y">
+                    {routine.sections.map((section) => {
+                      const isSectionExpanded = expandedSections.has(section.id);
+
+                      return (
+                        <div key={section.id}>
+                          {/* Section Header */}
+                          <div
+                            className="flex items-center gap-2 px-4 py-2 bg-muted/10 cursor-pointer"
+                            onClick={() => toggleSection(section.id)}
+                          >
+                            <button className="text-muted-foreground">
+                              {isSectionExpanded ? (
+                                <ChevronDown className="h-3 w-3" />
+                              ) : (
+                                <ChevronRight className="h-3 w-3" />
+                              )}
+                            </button>
+                            <span
+                              className="text-sm font-medium uppercase tracking-wide flex-1"
+                              style={{ color: routine.color }}
+                            >
+                              {section.name}
+                            </span>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100">
+                                  <MoreHorizontal className="h-3 w-3" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setAddingItemTo(section.id);
+                                  }}
+                                >
+                                  <Plus className="h-4 w-4 mr-2" />
+                                  Add Item
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    deleteSection(section.id);
+                                  }}
+                                  className="text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Section
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </div>
+
+                          {/* Items */}
+                          {isSectionExpanded && (
+                            <div className="px-4 py-2 space-y-1">
+                              {section.items.map((item) => (
+                                <div key={item.id}>
+                                  {/* Main Item */}
+                                  <div className="flex items-center gap-2 py-1 group">
+                                    <Checkbox
+                                      checked={item.isCompleted}
+                                      onCheckedChange={() => handleToggleItem(item)}
+                                    />
+                                    <span
+                                      className={cn(
+                                        "flex-1 text-sm",
+                                        item.isCompleted && "line-through text-muted-foreground"
+                                      )}
+                                    >
+                                      {item.name}
+                                    </span>
+                                    {item.isTrackable && (
+                                      <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+                                        tracked
+                                      </span>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100"
+                                      onClick={() =>
+                                        setAddingSubItemTo({ sectionId: section.id, parentId: item.id })
+                                      }
+                                    >
+                                      <Plus className="h-3 w-3" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                                      onClick={() => deleteItem(item.id)}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+
+                                  {/* Sub Items */}
+                                  {item.subItems && item.subItems.length > 0 && (
+                                    <div className="ml-6 space-y-1">
+                                      {item.subItems.map((subItem) => (
+                                        <div key={subItem.id} className="flex items-center gap-2 py-1 group">
+                                          <Checkbox
+                                            checked={subItem.isCompleted}
+                                            onCheckedChange={() => handleToggleItem(subItem)}
+                                          />
+                                          <span
+                                            className={cn(
+                                              "flex-1 text-sm",
+                                              subItem.isCompleted && "line-through text-muted-foreground"
+                                            )}
+                                          >
+                                            {subItem.name}
+                                          </span>
+                                          <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className="h-6 w-6 opacity-0 group-hover:opacity-100 text-destructive"
+                                            onClick={() => deleteItem(subItem.id)}
+                                          >
+                                            <Trash2 className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+
+                              {/* Add Item Inline */}
+                              {addingItemTo === section.id && (
+                                <div className="flex items-center gap-2 py-1">
+                                  <Input
+                                    value={newItemName}
+                                    onChange={(e) => setNewItemName(e.target.value)}
+                                    placeholder="New item..."
+                                    className="h-8 text-sm"
+                                    autoFocus
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter") handleAddItem(section.id);
+                                      if (e.key === "Escape") {
+                                        setAddingItemTo(null);
+                                        setNewItemName("");
+                                      }
+                                    }}
+                                  />
+                                  <Button size="sm" onClick={() => handleAddItem(section.id)}>
+                                    Add
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => {
+                                      setAddingItemTo(null);
+                                      setNewItemName("");
+                                    }}
+                                  >
+                                    Cancel
+                                  </Button>
+                                </div>
+                              )}
+
+                              {/* Add Item Button */}
+                              {addingItemTo !== section.id && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="w-full justify-start text-muted-foreground"
+                                  onClick={() => setAddingItemTo(section.id)}
+                                >
+                                  <Plus className="h-3 w-3 mr-2" />
+                                  Add item
+                                </Button>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+
+                    {/* Add Section Inline */}
+                    {addingSectionTo === routine.id && (
+                      <div className="flex items-center gap-2 px-4 py-2">
+                        <Input
+                          value={newSectionName}
+                          onChange={(e) => setNewSectionName(e.target.value)}
+                          placeholder="Section name..."
+                          className="h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleAddSection(routine.id);
+                            if (e.key === "Escape") {
+                              setAddingSectionTo(null);
+                              setNewSectionName("");
+                            }
+                          }}
+                        />
+                        <Button size="sm" onClick={() => handleAddSection(routine.id)}>
+                          Add
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setAddingSectionTo(null);
+                            setNewSectionName("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* Add Routine Dialog */}
+      <Dialog open={addRoutineOpen} onOpenChange={setAddRoutineOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Routine</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={newRoutineName}
+            onChange={(e) => setNewRoutineName(e.target.value)}
+            placeholder="Routine name..."
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleAddRoutine();
+            }}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddRoutineOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddRoutine}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Routine Dialog */}
+      <Dialog open={!!editingRoutine} onOpenChange={(open) => !open && setEditingRoutine(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Routine</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={editRoutineName}
+            onChange={(e) => setEditRoutineName(e.target.value)}
+            placeholder="Routine name..."
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleEditRoutine();
+            }}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setEditingRoutine(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditRoutine}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Sub Item Dialog */}
+      <Dialog open={!!addingSubItemTo} onOpenChange={(open) => !open && setAddingSubItemTo(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Sub-Item</DialogTitle>
+          </DialogHeader>
+          <Input
+            value={newSubItemName}
+            onChange={(e) => setNewSubItemName(e.target.value)}
+            placeholder="Sub-item name..."
+            autoFocus
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleAddSubItem();
+            }}
+          />
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setAddingSubItemTo(null)}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddSubItem}>Add</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Routine Confirmation */}
+      <AlertDialog open={!!deleteRoutineId} onOpenChange={(open) => !open && setDeleteRoutineId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Routine</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this routine? This will delete all sections and items within it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteRoutine}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

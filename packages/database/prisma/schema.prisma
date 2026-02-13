@@ -199,6 +199,94 @@ model PlanningNote {
 }
 
 // ============================================
+// ROUTINES (daily habit stacks)
+// ============================================
+model Routine {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  icon        String?
+  color       String    @default("#808080")
+  order       Int       @default(0)
+  isArchived  Boolean   @default(false)
+  variant     String?   // Future: "weekday", "weekend", etc.
+
+  sections    RoutineSection[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([order])
+  @@index([isArchived])
+}
+
+// ============================================
+// ROUTINE SECTIONS (groups within a routine)
+// ============================================
+model RoutineSection {
+  id        String  @id @default(cuid())
+  name      String
+  order     Int     @default(0)
+
+  routineId String
+  routine   Routine @relation(fields: [routineId], references: [id], onDelete: Cascade)
+
+  items     RoutineItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([routineId])
+  @@index([order])
+}
+
+// ============================================
+// ROUTINE ITEMS (checkable items within sections)
+// ============================================
+model RoutineItem {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  order       Int      @default(0)
+  isTrackable Boolean  @default(false)
+
+  sectionId   String
+  section     RoutineSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  // Self-relation for sub-items (one level only)
+  parentId    String?
+  parent      RoutineItem?  @relation("SubItems", fields: [parentId], references: [id], onDelete: Cascade)
+  subItems    RoutineItem[] @relation("SubItems")
+
+  completions RoutineItemCompletion[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([sectionId])
+  @@index([parentId])
+  @@index([order])
+}
+
+// ============================================
+// ROUTINE ITEM COMPLETIONS (daily tracking)
+// ============================================
+model RoutineItemCompletion {
+  id          String   @id @default(cuid())
+
+  itemId      String
+  item        RoutineItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  // Date of completion using "routine day" (4am-4am window)
+  routineDate String
+  completedAt DateTime @default(now())
+
+  @@unique([itemId, routineDate])
+  @@index([itemId])
+  @@index([routineDate])
+}
+
+// ============================================
 // ENUMS
 // ============================================
 enum Priority {

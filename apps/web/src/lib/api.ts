@@ -22,6 +22,17 @@ import type {
   PlanningNote,
   CreatePlanningNoteInput,
   UpdatePlanningNoteInput,
+  Routine,
+  RoutineWithSections,
+  RoutineSection,
+  RoutineItem,
+  RoutineItemCompletion,
+  CreateRoutineInput,
+  UpdateRoutineInput,
+  CreateRoutineSectionInput,
+  UpdateRoutineSectionInput,
+  CreateRoutineItemInput,
+  UpdateRoutineItemInput,
 } from "@proj-mgmt/shared";
 
 const API_BASE =
@@ -234,6 +245,79 @@ export const api = {
       request<void>("/planning-notes/reorder", {
         method: "POST",
         body: JSON.stringify({ quarter, orderedIds }),
+      }),
+  },
+
+  routines: {
+    list: (includeArchived = false) =>
+      request<RoutineWithSections[]>(
+        `/routines${buildQueryString({ include_archived: includeArchived })}`
+      ),
+    get: (id: string) => request<RoutineWithSections>(`/routines/${id}`),
+    create: (data: CreateRoutineInput) =>
+      request<Routine>("/routines", {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdateRoutineInput) =>
+      request<Routine>(`/routines/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/routines/${id}`, { method: "DELETE" }),
+    reorder: (orderedIds: string[]) =>
+      request<void>("/routines/reorder", {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
+  },
+
+  routineSections: {
+    create: (routineId: string, data: CreateRoutineSectionInput) =>
+      request<RoutineSection>(`/routines/${routineId}/sections`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdateRoutineSectionInput) =>
+      request<RoutineSection>(`/routine-sections/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/routine-sections/${id}`, { method: "DELETE" }),
+    reorder: (orderedIds: string[]) =>
+      request<void>("/routine-sections/reorder", {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
+  },
+
+  routineItems: {
+    create: (sectionId: string, data: CreateRoutineItemInput) =>
+      request<RoutineItem>(`/routine-sections/${sectionId}/items`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      }),
+    update: (id: string, data: UpdateRoutineItemInput) =>
+      request<RoutineItem>(`/routine-items/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<void>(`/routine-items/${id}`, { method: "DELETE" }),
+    reorder: (orderedIds: string[]) =>
+      request<void>("/routine-items/reorder", {
+        method: "POST",
+        body: JSON.stringify({ orderedIds }),
+      }),
+    complete: (id: string) =>
+      request<RoutineItemCompletion>(`/routine-items/${id}/complete`, {
+        method: "POST",
+      }),
+    uncomplete: (id: string) =>
+      request<void>(`/routine-items/${id}/uncomplete`, {
+        method: "POST",
       }),
   },
 };

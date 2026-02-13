@@ -4,6 +4,7 @@ export * from "./types/project";
 export * from "./types/label";
 export * from "./types/area";
 export * from "./types/planningNote";
+export * from "./types/routine";
 export * from "./types/api";
 
 // Constants
@@ -16,3 +17,4 @@ export * from "./validation/project";
 export * from "./validation/label";
 export * from "./validation/area";
 export * from "./validation/planningNote";
+export * from "./validation/routine";
