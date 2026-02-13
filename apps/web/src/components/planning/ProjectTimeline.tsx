@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, Calendar, CalendarOff, Trash2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronRight as ChevronRightIcon, ExternalLink, CalendarOff, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Popover,
@@ -44,7 +44,6 @@ export function ProjectTimeline({ areas }: ProjectTimelineProps) {
   const [dragState, setDragState] = useState<DragState | null>(null);
   const [tempWeeks, setTempWeeks] = useState<{ startWeek: string; endWeek: string } | null>(null);
   const [collapsedAreas, setCollapsedAreas] = useState<Set<string>>(new Set());
-  const [collapsedDockAreas, setCollapsedDockAreas] = useState<Set<string>>(new Set());
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -156,33 +155,23 @@ export function ProjectTimeline({ areas }: ProjectTimelineProps) {
     setSelectedProject(null);
   };
 
-  const handleScheduleProject = async (project: Project) => {
-    // Schedule at current week with 2-week span
-    const startWeek = currentWeek;
-    const startIndex = weeks.findIndex(w => w.week === startWeek);
-    const endWeek = weeks[Math.min(startIndex + 1, weeks.length - 1)]?.week || startWeek;
-
-    await updateProject(project.id, {
-      startWeek,
-      endWeek,
-    });
+  const handleUnscheduleProject = async (project: Project) => {
+    // Close menu immediately before the project moves
     setMenuOpen(false);
     setSelectedProject(null);
-  };
 
-  const handleUnscheduleProject = async (project: Project) => {
     await updateProject(project.id, {
       startWeek: null,
       endWeek: null,
     });
-    setMenuOpen(false);
-    setSelectedProject(null);
   };
 
   const handleDeleteProject = async (project: Project) => {
-    await deleteProject(project.id);
+    // Close menu immediately before the project is removed
     setMenuOpen(false);
     setSelectedProject(null);
+
+    await deleteProject(project.id);
   };
 
   // Handle drag move (for scheduled projects only - move/resize)
@@ -267,10 +256,6 @@ export function ProjectTimeline({ areas }: ProjectTimelineProps) {
   const getScheduledByArea = (areaId: string) =>
     projects.filter(p => p.areaId === areaId && !p.isArchived && p.startWeek && p.endWeek);
 
-  // Get unscheduled projects for an area
-  const getUnscheduledByArea = (areaId: string) =>
-    projects.filter(p => p.areaId === areaId && !p.isArchived && (!p.startWeek || !p.endWeek));
-
   // Calculate Y positions for projects within an area (handles overlapping and variable heights)
   const getProjectLayoutInArea = (areaId: string) => {
     const areaProjects = getScheduledByArea(areaId);
@@ -320,19 +305,6 @@ export function ProjectTimeline({ areas }: ProjectTimelineProps) {
   // Toggle area collapse in timeline
   const toggleArea = (areaId: string) => {
     setCollapsedAreas(prev => {
-      const next = new Set(prev);
-      if (next.has(areaId)) {
-        next.delete(areaId);
-      } else {
-        next.add(areaId);
-      }
-      return next;
-    });
-  };
-
-  // Toggle area collapse in bottom dock
-  const toggleDockArea = (areaId: string) => {
-    setCollapsedDockAreas(prev => {
       const next = new Set(prev);
       if (next.has(areaId)) {
         next.delete(areaId);
@@ -599,96 +571,6 @@ export function ProjectTimeline({ areas }: ProjectTimelineProps) {
         </div>
         </div>
 
-        {/* Unscheduled projects by area - directly below timeline */}
-        <div className="border-t bg-muted/30 mt-4">
-          <div className="px-4 py-2 text-xs font-medium text-muted-foreground border-b">
-            Unscheduled Projects
-          </div>
-          {areas.map(area => {
-            const unscheduled = getUnscheduledByArea(area.id);
-            if (unscheduled.length === 0) return null;
-            const isCollapsed = collapsedDockAreas.has(area.id);
-
-            return (
-              <div key={area.id}>
-                <div
-                  className="flex items-center gap-2 px-4 py-1.5 cursor-pointer hover:bg-muted/50"
-                  onClick={() => toggleDockArea(area.id)}
-                >
-                  {isCollapsed ? (
-                    <ChevronRightIcon className="h-3 w-3 text-muted-foreground" />
-                  ) : (
-                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
-                  )}
-                  {area.icon && <span className="text-sm">{area.icon}</span>}
-                  <span className="text-sm font-medium" style={{ color: area.color }}>
-                    {area.name}
-                  </span>
-                  <span className="text-xs text-muted-foreground">({unscheduled.length})</span>
-                </div>
-                {!isCollapsed && (
-                  <div className="flex flex-wrap gap-2 px-4 pb-2 pl-8">
-                    {unscheduled.map(project => (
-                      <Popover
-                        key={project.id}
-                        open={menuOpen && selectedProject?.id === project.id}
-                        onOpenChange={(open) => {
-                          setMenuOpen(open);
-                          if (open) setSelectedProject(project);
-                          else setSelectedProject(null);
-                        }}
-                      >
-                        <PopoverTrigger asChild>
-                          <button
-                            className={cn(
-                              "flex items-center gap-1.5 px-2 py-1 rounded text-sm cursor-pointer",
-                              "border hover:bg-muted/50 transition-colors"
-                            )}
-                            style={{ borderColor: area.color }}
-                          >
-                            <span
-                              className="w-2 h-2 rounded-full flex-shrink-0"
-                              style={{ backgroundColor: area.color }}
-                            />
-                            <span>{project.name}</span>
-                          </button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-48 p-1" align="start">
-                          <button
-                            onClick={() => handleOpenProject(project)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-muted"
-                          >
-                            <ExternalLink className="h-4 w-4" />
-                            Open Project
-                          </button>
-                          <button
-                            onClick={() => handleScheduleProject(project)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-muted"
-                          >
-                            <Calendar className="h-4 w-4" />
-                            Schedule
-                          </button>
-                          <button
-                            onClick={() => handleDeleteProject(project)}
-                            className="flex items-center gap-2 w-full px-2 py-1.5 text-sm rounded hover:bg-muted text-red-500"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Delete
-                          </button>
-                        </PopoverContent>
-                      </Popover>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {areas.every(area => getUnscheduledByArea(area.id).length === 0) && (
-            <div className="px-4 py-3 text-sm text-muted-foreground text-center">
-              All projects scheduled
-            </div>
-          )}
-        </div>
       </div>
     </div>
   );

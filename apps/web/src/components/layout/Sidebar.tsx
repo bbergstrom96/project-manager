@@ -27,6 +27,7 @@ import {
   Inbox,
   Calendar,
   CalendarDays,
+  CalendarPlus,
   Hash,
   Plus,
   ChevronDown,
@@ -56,6 +57,7 @@ import { AddAreaDialog } from "@/components/planning/AddAreaDialog";
 import { EditAreaDialog } from "@/components/planning/EditAreaDialog";
 import { EditLabelDialog } from "@/components/labels/EditLabelDialog";
 import { api } from "@/lib/api";
+import { getCurrentWeek, generateWeeksForYear } from "@/lib/weeks";
 import type { Area, Project, Label } from "@proj-mgmt/shared";
 
 interface NavItemProps {
@@ -74,7 +76,7 @@ function NavItem({ href, icon, label, count, color }: NavItemProps) {
     <Link
       href={href}
       className={cn(
-        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+        "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -100,15 +102,15 @@ function CollapsibleSection({ title, children, onAdd }: CollapsibleSectionProps)
 
   return (
     <div>
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center justify-between px-2 py-1">
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+          className="flex items-center gap-1 text-[10px] font-semibold text-muted-foreground hover:text-foreground uppercase tracking-wider"
         >
           {isOpen ? (
-            <ChevronDown className="h-4 w-4" />
+            <ChevronDown className="h-3.5 w-3.5" />
           ) : (
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-3.5 w-3.5" />
           )}
           {title}
         </button>
@@ -116,14 +118,14 @@ function CollapsibleSection({ title, children, onAdd }: CollapsibleSectionProps)
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-5 w-5"
             onClick={onAdd}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
-      {isOpen && <div className="space-y-1">{children}</div>}
+      {isOpen && <div className="space-y-0.5">{children}</div>}
     </div>
   );
 }
@@ -133,13 +135,23 @@ interface ProjectNavItemProps {
   areaColor?: string;
   onEdit: (project: Project) => void;
   onDelete: (projectId: string) => void;
+  onSchedule: (project: Project) => void;
+  onUnschedule: (project: Project) => void;
   isDragging?: boolean;
 }
 
-function ProjectNavItem({ project, areaColor, onEdit, onDelete, isDragging: isDraggingProp }: ProjectNavItemProps) {
+function ProjectNavItem({ project, areaColor, onEdit, onDelete, onSchedule, onUnschedule, isDragging: isDraggingProp }: ProjectNavItemProps) {
   const pathname = usePathname();
   const isActive = pathname === `/projects/${project.id}`;
   const iconColor = areaColor || project.color;
+  const isScheduled = project.startWeek && project.endWeek;
+
+  // Format schedule display: "2.2" or "2.2-2.3"
+  const scheduleDisplay = isScheduled
+    ? project.startWeek === project.endWeek
+      ? project.startWeek
+      : `${project.startWeek}-${project.endWeek}`
+    : null;
 
   const {
     attributes,
@@ -164,41 +176,66 @@ function ProjectNavItem({ project, areaColor, onEdit, onDelete, isDragging: isDr
       {...attributes}
       {...listeners}
       className={cn(
-        "group/project flex items-center cursor-grab active:cursor-grabbing",
+        "group/project flex items-center cursor-grab active:cursor-grabbing px-2 py-0.5",
         isDragging && "opacity-50"
       )}
     >
       <Link
         href={`/projects/${project.id}`}
         onClick={(e) => {
-          // Prevent navigation when dragging
           if (isDragging) {
             e.preventDefault();
           }
         }}
         className={cn(
-          "flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition-colors flex-1",
+          "flex items-center gap-1.5 rounded py-0.5 text-sm transition-colors flex-1 min-w-0",
           isActive
-            ? "bg-accent text-accent-foreground"
-            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+            ? "text-accent-foreground"
+            : "text-muted-foreground hover:text-foreground"
         )}
       >
-        <FolderKanban className="h-4 w-4 flex-shrink-0" style={{ color: iconColor }} />
-        <span className="flex-1 truncate">{project.name}</span>
-        {project._count?.tasks > 0 && (
-          <span className="text-xs text-muted-foreground">{project._count.tasks}</span>
-        )}
+        <FolderKanban className="h-3.5 w-3.5 flex-shrink-0 self-start mt-0.5" style={{ color: iconColor }} />
+        <span className="flex-1">{project.name}</span>
       </Link>
+      {/* Schedule: show weeks (click to unschedule) OR calendar button (click to schedule) */}
+      {isScheduled ? (
+        <button
+          className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap flex-shrink-0 px-1 rounded hover:bg-muted/50 self-start mt-0.5"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onUnschedule(project as Project);
+          }}
+          title="Click to unschedule"
+        >
+          {scheduleDisplay}
+        </button>
+      ) : (
+        <button
+          className="h-5 w-5 flex items-center justify-center flex-shrink-0 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50 self-start"
+          onClick={(e) => {
+            e.stopPropagation();
+            e.preventDefault();
+            onSchedule(project as Project);
+          }}
+          title="Schedule"
+        >
+          <CalendarPlus className="h-3.5 w-3.5" />
+        </button>
+      )}
+      {/* Task count */}
+      {project._count?.tasks > 0 && (
+        <span className="text-[10px] text-muted-foreground flex-shrink-0">{project._count.tasks}</span>
+      )}
+      {/* More menu on hover */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 opacity-0 group-hover/project:opacity-100 transition-opacity"
+          <button
+            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground opacity-0 group-hover/project:opacity-100 transition-opacity flex-shrink-0"
             onClick={(e) => e.stopPropagation()}
           >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
+            <MoreHorizontal className="h-3.5 w-3.5" />
+          </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={() => onEdit(project as Project)}>
@@ -241,11 +278,11 @@ function LabelNavItem({ label, onEdit, onDelete }: LabelNavItemProps) {
   const isActive = pathname === `/labels/${label.id}`;
 
   return (
-    <div className="group/label flex items-center">
+    <div className="group/label flex items-center px-2">
       <Link
         href={`/labels/${label.id}`}
         className={cn(
-          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors flex-1",
+          "flex items-center gap-2 rounded-md py-1 text-sm transition-colors flex-1",
           isActive
             ? "bg-accent text-accent-foreground"
             : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -262,9 +299,9 @@ function LabelNavItem({ label, onEdit, onDelete }: LabelNavItemProps) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 opacity-0 group-hover/label:opacity-100 transition-opacity"
+            className="h-5 w-5 opacity-0 group-hover/label:opacity-100 transition-opacity"
           >
-            <MoreHorizontal className="h-4 w-4" />
+            <MoreHorizontal className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
@@ -292,10 +329,12 @@ interface AreaSectionProps {
   onDeleteArea: (areaId: string) => void;
   onEditProject: (project: Project) => void;
   onDeleteProject: (projectId: string) => void;
+  onScheduleProject: (project: Project) => void;
+  onUnscheduleProject: (project: Project) => void;
   activeProjectId?: string | null;
 }
 
-function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProject, onDeleteProject, activeProjectId }: AreaSectionProps) {
+function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProject, onDeleteProject, onScheduleProject, onUnscheduleProject, activeProjectId }: AreaSectionProps) {
   const [isOpen, setIsOpen] = useState(true);
 
   const { setNodeRef, isOver } = useDroppable({
@@ -305,41 +344,27 @@ function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProje
 
   return (
     <div className="group/area">
-      <div className="flex items-center justify-between px-3 py-2">
+      <div className="flex items-center px-2 py-1">
         <Link
           href={`/areas/${area.id}`}
-          className="flex items-center gap-2 text-sm font-semibold hover:opacity-80 flex-1"
+          className="flex items-center gap-1.5 text-sm font-semibold hover:opacity-80 flex-1 min-w-0"
         >
-          <button
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setIsOpen(!isOpen);
-            }}
-            className="text-muted-foreground hover:text-foreground"
-          >
-            {isOpen ? (
-              <ChevronDown className="h-4 w-4" />
-            ) : (
-              <ChevronRight className="h-4 w-4" />
-            )}
-          </button>
-          {area.icon && <span>{area.icon}</span>}
-          <span className="uppercase tracking-wide" style={{ color: area.color }}>{area.name}</span>
+          {area.icon && <span className="flex-shrink-0">{area.icon}</span>}
+          <span className="uppercase tracking-wide text-sm truncate" style={{ color: area.color }}>{area.name}</span>
         </Link>
-        <div className="flex items-center gap-1 opacity-0 group-hover/area:opacity-100 transition-opacity">
+        <div className="flex items-center gap-0.5 flex-shrink-0">
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-5 w-5 opacity-0 group-hover/area:opacity-100 transition-opacity"
             onClick={() => onAddProject(area.id)}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon" className="h-6 w-6">
-                <MoreHorizontal className="h-4 w-4" />
+              <Button variant="ghost" size="icon" className="h-5 w-5 opacity-0 group-hover/area:opacity-100 transition-opacity">
+                <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
@@ -356,13 +381,23 @@ function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProje
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <button
+            onClick={() => setIsOpen(!isOpen)}
+            className="h-5 w-5 flex items-center justify-center text-muted-foreground hover:text-foreground"
+          >
+            {isOpen ? (
+              <ChevronDown className="h-3.5 w-3.5" />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" />
+            )}
+          </button>
         </div>
       </div>
       {isOpen && (
         <div
           ref={setNodeRef}
           className={cn(
-            "ml-4 space-y-0.5 min-h-[8px] rounded transition-colors",
+            "ml-4 space-y-0 min-h-[4px] rounded transition-colors",
             isOver && "bg-accent/50"
           )}
         >
@@ -377,6 +412,8 @@ function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProje
                 areaColor={area.color}
                 onEdit={onEditProject}
                 onDelete={onDeleteProject}
+                onSchedule={onScheduleProject}
+                onUnschedule={onUnscheduleProject}
                 isDragging={activeProjectId === project.id}
               />
             ))}
@@ -472,6 +509,27 @@ export function Sidebar() {
     if (confirm("Are you sure you want to delete this label?")) {
       await deleteLabel(labelId);
     }
+  };
+
+  const handleScheduleProject = async (project: Project) => {
+    const { year, week: currentWeek } = getCurrentWeek();
+    const weeks = generateWeeksForYear(year);
+    const startIndex = weeks.findIndex(w => w.week === currentWeek);
+    const endWeek = weeks[Math.min(startIndex + 1, weeks.length - 1)]?.week || currentWeek;
+
+    await updateProject(project.id, {
+      startWeek: currentWeek,
+      endWeek,
+    });
+    fetchAreas(); // Refresh to show updated schedule indicator
+  };
+
+  const handleUnscheduleProject = async (project: Project) => {
+    await updateProject(project.id, {
+      startWeek: null,
+      endWeek: null,
+    });
+    fetchAreas(); // Refresh to remove schedule indicator
   };
 
   // Find which area a project belongs to
@@ -641,20 +699,20 @@ export function Sidebar() {
           label="Planning"
         />
 
-        <Separator className="my-4" />
+        <Separator className="my-2" />
 
         {/* Areas header with add button */}
-        <div className="flex items-center justify-between px-3 py-2">
-          <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="flex items-center justify-between px-2 py-1">
+          <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Areas
           </span>
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6"
+            className="h-5 w-5"
             onClick={() => setAddAreaOpen(true)}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         </div>
 
@@ -675,6 +733,8 @@ export function Sidebar() {
               onDeleteArea={handleDeleteArea}
               onEditProject={handleEditProject}
               onDeleteProject={handleDeleteProject}
+              onScheduleProject={handleScheduleProject}
+              onUnscheduleProject={handleUnscheduleProject}
               activeProjectId={activeProject?.project.id}
             />
           ))}
@@ -689,12 +749,12 @@ export function Sidebar() {
         </DndContext>
 
         {areas.length === 0 && (
-          <p className="px-3 py-2 text-xs text-muted-foreground">
+          <p className="px-2 py-1 text-xs text-muted-foreground">
             No areas yet. Click + to create one.
           </p>
         )}
 
-        <Separator className="my-4" />
+        <Separator className="my-2" />
 
         <CollapsibleSection title="Labels">
           {labels.map((label) => (
