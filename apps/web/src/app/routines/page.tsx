@@ -64,6 +64,8 @@ export default function RoutinesPage() {
   const [newItemName, setNewItemName] = useState("");
   const [addingSubItemTo, setAddingSubItemTo] = useState<{ sectionId: string; parentId: string } | null>(null);
   const [newSubItemName, setNewSubItemName] = useState("");
+  const [addingItemToRoutine, setAddingItemToRoutine] = useState<string | null>(null);
+  const [newRoutineItemName, setNewRoutineItemName] = useState("");
 
   useEffect(() => {
     fetchRoutines();
@@ -144,6 +146,28 @@ export default function RoutinesPage() {
     });
     setNewSubItemName("");
     setAddingSubItemTo(null);
+  };
+
+  const handleAddItemToRoutine = async (routineId: string) => {
+    if (!newRoutineItemName.trim()) return;
+    const routine = routines.find((r) => r.id === routineId);
+    if (!routine) return;
+
+    let sectionId: string;
+    if (routine.sections.length === 0) {
+      // Create a default section
+      const section = await addSection(routineId, { name: "Items" });
+      sectionId = section.id;
+      // Expand the new section
+      setExpandedSections((prev) => new Set([...prev, sectionId]));
+    } else {
+      // Use the first section
+      sectionId = routine.sections[0].id;
+    }
+
+    await addItem(sectionId, { name: newRoutineItemName.trim() });
+    setNewRoutineItemName("");
+    setAddingItemToRoutine(null);
   };
 
   const handleToggleItem = async (item: RoutineItemWithCompletion) => {
@@ -260,6 +284,15 @@ export default function RoutinesPage() {
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Add Section
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAddingItemToRoutine(routine.id);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Item
                       </DropdownMenuItem>
                       <DropdownMenuItem
                         onClick={(e) => {
@@ -487,6 +520,63 @@ export default function RoutinesPage() {
                           }}
                         >
                           Cancel
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Add Item to Routine Inline */}
+                    {addingItemToRoutine === routine.id && (
+                      <div className="flex items-center gap-2 px-4 py-2">
+                        <Input
+                          value={newRoutineItemName}
+                          onChange={(e) => setNewRoutineItemName(e.target.value)}
+                          placeholder="New item..."
+                          className="h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleAddItemToRoutine(routine.id);
+                            if (e.key === "Escape") {
+                              setAddingItemToRoutine(null);
+                              setNewRoutineItemName("");
+                            }
+                          }}
+                        />
+                        <Button size="sm" onClick={() => handleAddItemToRoutine(routine.id)}>
+                          Add
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => {
+                            setAddingItemToRoutine(null);
+                            setNewRoutineItemName("");
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Quick add buttons when nothing is being added */}
+                    {addingSectionTo !== routine.id && addingItemToRoutine !== routine.id && (
+                      <div className="flex gap-2 px-4 py-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          onClick={() => setAddingItemToRoutine(routine.id)}
+                        >
+                          <Plus className="h-3 w-3 mr-2" />
+                          Add item
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-muted-foreground"
+                          onClick={() => setAddingSectionTo(routine.id)}
+                        >
+                          <Plus className="h-3 w-3 mr-2" />
+                          Add section
                         </Button>
                       </div>
                     )}
