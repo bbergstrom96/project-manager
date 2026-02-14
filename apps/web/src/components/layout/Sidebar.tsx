@@ -34,10 +34,10 @@ import {
   ChevronRight,
   FolderKanban,
   GanttChart,
-  ListChecks,
   MoreHorizontal,
   Pencil,
   Trash2,
+  Menu,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -72,12 +72,21 @@ interface NavItemProps {
 function NavItem({ href, icon, label, count, color }: NavItemProps) {
   const pathname = usePathname();
   const isActive = pathname === href;
+  const { setSidebarOpen } = useUIStore();
+
+  const handleClick = () => {
+    // Close sidebar on mobile after navigation
+    if (window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  };
 
   return (
     <Link
       href={href}
+      onClick={handleClick}
       className={cn(
-        "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+        "flex items-center gap-2 rounded-md px-2 py-2.5 md:py-1.5 text-sm transition-colors",
         isActive
           ? "bg-accent text-accent-foreground"
           : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
@@ -426,7 +435,7 @@ function AreaSection({ area, onAddProject, onEditArea, onDeleteArea, onEditProje
 }
 
 export function Sidebar() {
-  const { sidebarOpen, setAddTaskOpen } = useUIStore();
+  const { sidebarOpen, setSidebarOpen, setHasMounted } = useUIStore();
   const { fetchProjects, deleteProject, updateProject } = useProjectStore();
   const { areas, fetchAreas, deleteArea, reorderProjectsInArea } = useAreaStore();
   const { labels, fetchLabels, deleteLabel } = useLabelStore();
@@ -451,6 +460,10 @@ export function Sidebar() {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  useEffect(() => {
+    setHasMounted();
+  }, [setHasMounted]);
 
   useEffect(() => {
     fetchProjects();
@@ -646,8 +659,6 @@ export function Sidebar() {
     setActiveProject(null);
   };
 
-  if (!sidebarOpen) return null;
-
   return (
     <>
     <AddAreaDialog open={addAreaOpen} onOpenChange={setAddAreaOpen} />
@@ -671,24 +682,37 @@ export function Sidebar() {
       open={editLabelOpen}
       onOpenChange={setEditLabelOpen}
     />
-    <aside className="flex h-full w-64 flex-col border-r" style={{ backgroundColor: '#252830' }}>
-      <div className="p-4">
+    {/* Mobile backdrop */}
+    {sidebarOpen && (
+      <div
+        className="fixed inset-0 bg-black/50 z-40 md:hidden"
+        onClick={() => setSidebarOpen(false)}
+      />
+    )}
+    <aside
+      className={cn(
+        "flex h-full w-64 flex-col border-r z-50",
+        "fixed md:relative",
+        "transition-transform duration-200 ease-in-out md:transition-none",
+        sidebarOpen ? "translate-x-0" : "-translate-x-full",
+        !sidebarOpen && "md:hidden"
+      )}
+      style={{ backgroundColor: '#252830' }}
+    >
+      {/* Sidebar header with close button */}
+      <div className="flex items-center h-14 px-3 border-b border-border/50">
         <Button
-          className="w-full justify-start gap-2"
-          onClick={() => setAddTaskOpen(true)}
+          variant="ghost"
+          size="icon"
+          onClick={() => setSidebarOpen(false)}
+          className="h-10 w-10 md:h-9 md:w-9"
         >
-          <Plus className="h-4 w-4" />
-          Add Task
+          <Menu className="h-5 w-5" />
         </Button>
       </div>
 
-      <nav className="flex-1 space-y-1 overflow-y-auto px-2">
+      <nav className="flex-1 space-y-1 overflow-y-auto px-2 pt-2">
         <NavItem href="/" icon={<Inbox className="h-4 w-4" />} label="Inbox" />
-        <NavItem
-          href="/routines"
-          icon={<ListChecks className="h-4 w-4" />}
-          label="Routines"
-        />
         <NavItem
           href="/today"
           icon={<Calendar className="h-4 w-4" />}

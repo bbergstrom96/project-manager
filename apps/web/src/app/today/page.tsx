@@ -10,6 +10,7 @@ import { TaskForm } from "@/components/tasks/TaskForm";
 import { Button } from "@/components/ui/button";
 import { useProjectStore } from "@/stores/projectStore";
 import { useLabelStore } from "@/stores/labelStore";
+import { RoutinesSection } from "@/components/routines/RoutinesSection";
 
 export default function TodayPage() {
   const [showAddTask, setShowAddTask] = useState(false);
@@ -38,46 +39,50 @@ export default function TodayPage() {
 
   return (
     <div className="h-full">
-      <Header title="Today" />
-      <div className="p-6 max-w-3xl mx-auto">
-        <p className="text-sm text-muted-foreground mb-4">
-          {format(today, "EEEE, MMMM d")}
-        </p>
+      <Header title={`Today: ${format(today, "EEEE, MMMM d")}`} />
+      <div className="p-4 md:p-6 max-w-3xl mx-auto space-y-6 md:space-y-8">
+        <div>
+          <div className="mb-2">
+            <h2 className="text-lg font-semibold">Tasks</h2>
+          </div>
 
-        <TaskList filters={{ dueDate: "today" }} hideDueDate />
+          <TaskList filters={{ dueDate: "today" }} hideDueDate />
 
-        <div className="mt-4">
-          {/* Form - only mount after first open, then keep mounted for smooth transitions */}
-          {hasOpened && (
-            <div
-              className={cn(
-                "transition-all duration-200 ease-out overflow-hidden",
-                showAddTask
-                  ? "opacity-100 max-h-[500px]"
-                  : "opacity-0 max-h-0 pointer-events-none"
-              )}
-            >
-              <TaskForm
-                key={formKey.current}
-                defaultDueDate={today.toISOString()}
-                onClose={handleCloseForm}
-              />
-            </div>
-          )}
-
-          {/* Add task button */}
-          <Button
-            variant="ghost"
-            className={cn(
-              "w-full justify-start text-muted-foreground transition-all duration-200",
-              showAddTask && "opacity-0 h-0 overflow-hidden pointer-events-none"
+          <div className="mt-4">
+            {/* Form - only mount after first open, then keep mounted for smooth transitions */}
+            {hasOpened && (
+              <div
+                className={cn(
+                  "transition-all duration-200 ease-out overflow-hidden",
+                  showAddTask
+                    ? "opacity-100 max-h-[500px]"
+                    : "opacity-0 max-h-0 pointer-events-none"
+                )}
+              >
+                <TaskForm
+                  key={formKey.current}
+                  defaultDueDate={today.toISOString()}
+                  onClose={handleCloseForm}
+                />
+              </div>
             )}
-            onClick={handleOpenForm}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add task
-          </Button>
+
+            {/* Add task button */}
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full justify-start text-muted-foreground transition-all duration-200",
+                showAddTask && "opacity-0 h-0 overflow-hidden pointer-events-none"
+              )}
+              onClick={handleOpenForm}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Add task
+            </Button>
+          </div>
         </div>
+
+        <RoutinesSection />
       </div>
     </div>
   );

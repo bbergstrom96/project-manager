@@ -92,4 +92,5 @@ export interface UpdateRoutineItemInput {
   isTrackable?: boolean;
   order?: number;
   sectionId?: string;
+  parentId?: string | null;
 }
