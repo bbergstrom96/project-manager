@@ -215,27 +215,88 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
 
   updateItem: async (id, data) => {
     const previousRoutines = get().routines;
-    set((state) => ({
-      routines: state.routines.map((r) => ({
-        ...r,
-        sections: r.sections.map((s) => ({
-          ...s,
-          items: s.items.map((i) =>
-            i.id === id
-              ? { ...i, ...data }
-              : {
-                  ...i,
-                  subItems: i.subItems?.map((sub) =>
-                    sub.id === id ? { ...sub, ...data } : sub
-                  ),
+
+    // Handle parentId changes (moving items to become sub-items or vice versa)
+    if ('parentId' in data) {
+      set((state) => ({
+        routines: state.routines.map((r) => ({
+          ...r,
+          sections: r.sections.map((s) => {
+            // Find the item being moved
+            let itemToMove: typeof s.items[0] | undefined;
+
+            // Check if it's a top-level item
+            const topLevelItem = s.items.find((i) => i.id === id);
+            if (topLevelItem) {
+              itemToMove = { ...topLevelItem, ...data, subItems: topLevelItem.subItems };
+            }
+
+            // Check if it's a sub-item
+            if (!itemToMove) {
+              for (const item of s.items) {
+                const subItem = item.subItems?.find((sub) => sub.id === id);
+                if (subItem) {
+                  itemToMove = { ...subItem, ...data };
+                  break;
                 }
-          ),
+              }
+            }
+
+            if (!itemToMove) return s;
+
+            // Remove item from its current position
+            let newItems = s.items
+              .filter((i) => i.id !== id)
+              .map((i) => ({
+                ...i,
+                subItems: i.subItems?.filter((sub) => sub.id !== id),
+              }));
+
+            // Add to new position
+            if (data.parentId) {
+              // Make it a sub-item of the target
+              newItems = newItems.map((i) =>
+                i.id === data.parentId
+                  ? { ...i, subItems: [...(i.subItems || []), { ...itemToMove!, isCompleted: itemToMove!.isCompleted ?? false }] }
+                  : i
+              );
+            } else if (data.parentId === null) {
+              // Make it a top-level item
+              newItems = [...newItems, { ...itemToMove!, isCompleted: itemToMove!.isCompleted ?? false }];
+            }
+
+            return { ...s, items: newItems };
+          }),
         })),
-      })),
-    }));
+      }));
+    } else {
+      // Simple update without moving
+      set((state) => ({
+        routines: state.routines.map((r) => ({
+          ...r,
+          sections: r.sections.map((s) => ({
+            ...s,
+            items: s.items.map((i) =>
+              i.id === id
+                ? { ...i, ...data }
+                : {
+                    ...i,
+                    subItems: i.subItems?.map((sub) =>
+                      sub.id === id ? { ...sub, ...data } : sub
+                    ),
+                  }
+            ),
+          })),
+        })),
+      }));
+    }
 
     try {
       await api.routineItems.update(id, data);
+      // Refetch to get correct order after parent change
+      if ('parentId' in data) {
+        await get().fetchRoutines();
+      }
     } catch (error) {
       set({ routines: previousRoutines, error: (error as Error).message });
       throw error;

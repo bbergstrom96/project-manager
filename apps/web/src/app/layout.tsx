@@ -21,10 +21,13 @@ export default function RootLayout({
 
   return (
     <html lang="en" className="dark" style={bgColor}>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+      </head>
       <body className={inter.className} style={bgColor}>
         <div className="flex h-screen overflow-hidden" style={bgColor}>
           <Sidebar />
-          <main className="flex-1 overflow-y-auto" style={bgColor}>{children}</main>
+          <main className="flex-1 overflow-y-auto w-full" style={bgColor}>{children}</main>
         </div>
         <AddTaskDialog />
         <Toaster position="bottom-right" />

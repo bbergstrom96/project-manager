@@ -25,11 +25,11 @@ export const reorderRoutinesSchema = z.object({
 
 // Routine Section schemas
 export const createRoutineSectionSchema = z.object({
-  name: z.string().min(1, "Section name is required").max(100),
+  name: z.string().max(100), // Empty string allowed for default/unsectioned items
 });
 
 export const updateRoutineSectionSchema = z.object({
-  name: z.string().min(1).max(100).optional(),
+  name: z.string().max(100).optional(), // Empty string allowed for default/unsectioned items
   order: z.number().int().min(0).optional(),
 });
 
@@ -51,6 +51,7 @@ export const updateRoutineItemSchema = z.object({
   isTrackable: z.boolean().optional(),
   order: z.number().int().min(0).optional(),
   sectionId: z.string().cuid().optional(),
+  parentId: z.string().cuid().nullable().optional(),
 });
 
 export const reorderRoutineItemsSchema = z.object({
