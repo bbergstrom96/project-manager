@@ -262,7 +262,7 @@ export const useRoutineStore = create<RoutineState>((set, get) => ({
               );
             } else if (data.parentId === null) {
               // Make it a top-level item
-              newItems = [...newItems, { ...itemToMove!, isCompleted: itemToMove!.isCompleted ?? false }];
+              newItems = [...newItems, { ...itemToMove!, subItems: itemToMove!.subItems, isCompleted: itemToMove!.isCompleted ?? false }];
             }
 
             return { ...s, items: newItems };
