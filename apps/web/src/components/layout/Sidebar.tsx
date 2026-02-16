@@ -207,19 +207,11 @@ function ProjectNavItem({ project, areaColor, onEdit, onDelete, onSchedule, onUn
         <FolderKanban className="h-3.5 w-3.5 flex-shrink-0" style={{ color: iconColor }} />
         <span className="flex-1">{project.name}</span>
       </Link>
-      {/* Schedule: show weeks (click to unschedule) OR calendar button (click to schedule) */}
+      {/* Schedule: show weeks OR calendar button (click to schedule) */}
       {isScheduled ? (
-        <button
-          className="text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap flex-shrink-0 px-1 rounded hover:bg-muted/50"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            onUnschedule(project as Project);
-          }}
-          title="Click to unschedule"
-        >
+        <span className="text-[10px] text-muted-foreground whitespace-nowrap flex-shrink-0 px-1">
           {scheduleDisplay}
-        </button>
+        </span>
       ) : (
         <button
           className="h-5 w-5 flex items-center justify-center flex-shrink-0 text-muted-foreground hover:text-foreground rounded hover:bg-muted/50"
