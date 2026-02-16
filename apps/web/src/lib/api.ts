@@ -38,6 +38,46 @@ import type {
 const API_BASE =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
+// Auth token management
+const AUTH_TOKEN_KEY = "auth_token";
+
+export const auth = {
+  getToken: (): string | null => {
+    if (typeof window === "undefined") return null;
+    return localStorage.getItem(AUTH_TOKEN_KEY);
+  },
+  setToken: (token: string) => {
+    localStorage.setItem(AUTH_TOKEN_KEY, token);
+  },
+  clearToken: () => {
+    localStorage.removeItem(AUTH_TOKEN_KEY);
+  },
+  isAuthenticated: (): boolean => {
+    return !!auth.getToken();
+  },
+  login: async (password: string): Promise<boolean> => {
+    try {
+      const response = await fetch(`${API_BASE}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password }),
+      });
+      const data = await response.json();
+      if (data.success && data.data?.token) {
+        auth.setToken(data.data.token);
+        return true;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  },
+  logout: () => {
+    auth.clearToken();
+    window.location.href = "/login";
+  },
+};
+
 class ApiError extends Error {
   constructor(
     public code: string,
@@ -53,10 +93,16 @@ async function request<T>(
   endpoint: string,
   options?: RequestInit
 ): Promise<T> {
+  const token = auth.getToken();
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+
   const response = await fetch(`${API_BASE}${endpoint}`, {
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     ...options,
   });
 
@@ -67,6 +113,15 @@ async function request<T>(
       return undefined as T;
     }
     throw new ApiError("UNKNOWN_ERROR", "Empty response from server");
+  }
+
+  // Handle 401 - redirect to login
+  if (response.status === 401) {
+    auth.clearToken();
+    if (typeof window !== "undefined" && !window.location.pathname.includes("/login")) {
+      window.location.href = "/login";
+    }
+    throw new ApiError("UNAUTHORIZED", "Please log in");
   }
 
   const data = JSON.parse(text) as ApiResponse<T>;
