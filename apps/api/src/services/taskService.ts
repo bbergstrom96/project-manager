@@ -12,6 +12,16 @@ const taskInclude = {
   project: true,
   section: true,
   area: true,
+  subtasks: {
+    include: {
+      labels: {
+        include: {
+          label: true,
+        },
+      },
+    },
+    orderBy: { order: "asc" as const },
+  },
 };
 
 export class TaskService {
@@ -28,6 +38,9 @@ export class TaskService {
 
     // Default: show incomplete tasks
     where.isCompleted = filters.completed ?? false;
+
+    // Only show top-level tasks (subtasks are nested under parents)
+    where.parentId = null;
 
     if (filters.projectId) {
       where.projectId = filters.projectId === "inbox" ? null : filters.projectId;

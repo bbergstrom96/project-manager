@@ -18,11 +18,16 @@ export interface Task {
   updatedAt: Date;
 }
 
+export interface SubtaskWithLabels extends Task {
+  labels: { label: Label }[];
+}
+
 export interface TaskWithLabels extends Task {
   labels: { label: Label }[];
   project?: Project | null;
   section?: Section | null;
   area?: Area | null;
+  subtasks?: SubtaskWithLabels[];
 }
 
 export interface CreateTaskInput {

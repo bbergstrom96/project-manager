@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { api } from "@/lib/api";
-import type { TaskWithLabels, CreateTaskInput, UpdateTaskInput, TaskFilters } from "@proj-mgmt/shared";
+import type { TaskWithLabels, CreateTaskInput, UpdateTaskInput, TaskFilters, SubtaskWithLabels } from "@proj-mgmt/shared";
 
 interface TaskState {
   tasks: TaskWithLabels[];
@@ -16,6 +16,8 @@ interface TaskState {
   invalidate: () => void;
   fetchTasks: (force?: boolean) => Promise<void>;
   addTask: (data: CreateTaskInput) => Promise<TaskWithLabels>;
+  addSubtask: (parentId: string, data: Omit<CreateTaskInput, "parentId">) => Promise<void>;
+  removeSubtaskFromParent: (parentId: string, subtaskId: string) => void;
   updateTask: (id: string, data: UpdateTaskInput) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
   reopenTask: (id: string) => Promise<void>;
@@ -80,6 +82,40 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     const task = await api.tasks.create(data);
     set((state) => ({ tasks: [...state.tasks, task] }));
     return task;
+  },
+
+  addSubtask: async (parentId, data) => {
+    const subtask = await api.tasks.create({ ...data, parentId });
+    // Add the subtask to the parent task's subtasks array
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === parentId
+          ? {
+              ...t,
+              subtasks: [
+                ...(t.subtasks || []),
+                {
+                  ...subtask,
+                  labels: subtask.labels || [],
+                } as SubtaskWithLabels,
+              ],
+            }
+          : t
+      ),
+    }));
+  },
+
+  removeSubtaskFromParent: (parentId, subtaskId) => {
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === parentId
+          ? {
+              ...t,
+              subtasks: t.subtasks?.filter((s) => s.id !== subtaskId) || [],
+            }
+          : t
+      ),
+    }));
   },
 
   updateTask: async (id, data) => {
