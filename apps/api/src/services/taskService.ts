@@ -2,6 +2,7 @@ import { prisma } from "../lib/prisma";
 import { NotFoundError } from "../lib/errors";
 import type { CreateTaskSchema, UpdateTaskSchema } from "@proj-mgmt/shared";
 import { startOfDay, endOfDay, addDays } from "date-fns";
+import { emitTaskEvent } from "../socket/socketServer";
 
 const taskInclude = {
   labels: {
@@ -119,13 +120,14 @@ export class TaskService {
       where: { projectId: taskData.projectId ?? null },
     });
 
-    return prisma.task.create({
+    const task = await prisma.task.create({
       data: {
         ...taskData,
         dueDate: taskData.dueDate ? new Date(taskData.dueDate) : null,
         dueDateTime: taskData.dueDateTime
           ? new Date(taskData.dueDateTime)
           : null,
+        scheduledWeek: taskData.scheduledWeek ?? null,
         order: (maxOrder._max.order ?? -1) + 1,
         labels: labelIds
           ? {
@@ -135,6 +137,9 @@ export class TaskService {
       },
       include: taskInclude,
     });
+
+    emitTaskEvent("task:created", task);
+    return task;
   }
 
   async update(id: string, data: UpdateTaskSchema) {
@@ -154,7 +159,7 @@ export class TaskService {
       }
     }
 
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: {
         ...taskData,
@@ -170,15 +175,24 @@ export class TaskService {
             : taskData.dueDateTime
             ? new Date(taskData.dueDateTime)
             : undefined,
+        scheduledWeek:
+          taskData.scheduledWeek === null
+            ? null
+            : taskData.scheduledWeek !== undefined
+            ? taskData.scheduledWeek
+            : undefined,
       },
       include: taskInclude,
     });
+
+    emitTaskEvent("task:updated", task);
+    return task;
   }
 
   async complete(id: string) {
     await this.findById(id);
 
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: {
         isCompleted: true,
@@ -186,12 +200,15 @@ export class TaskService {
       },
       include: taskInclude,
     });
+
+    emitTaskEvent("task:completed", task);
+    return task;
   }
 
   async reopen(id: string) {
     await this.findById(id);
 
-    return prisma.task.update({
+    const task = await prisma.task.update({
       where: { id },
       data: {
         isCompleted: false,
@@ -199,14 +216,19 @@ export class TaskService {
       },
       include: taskInclude,
     });
+
+    emitTaskEvent("task:updated", task);
+    return task;
   }
 
   async delete(id: string) {
     await this.findById(id);
 
-    return prisma.task.delete({
+    await prisma.task.delete({
       where: { id },
     });
+
+    emitTaskEvent("task:deleted", { id });
   }
 
   async reorder(orderedIds: string[]) {

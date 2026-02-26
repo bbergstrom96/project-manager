@@ -3,9 +3,11 @@
 import { usePathname } from "next/navigation";
 import { Sidebar } from "./Sidebar";
 import { AddTaskDialog } from "@/components/tasks/AddTaskDialog";
+import { useRealtimeSync } from "@/hooks/useRealtimeSync";
 
 export function AuthenticatedLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  useRealtimeSync();
   const isLoginPage = pathname === "/login";
 
   if (isLoginPage) {
