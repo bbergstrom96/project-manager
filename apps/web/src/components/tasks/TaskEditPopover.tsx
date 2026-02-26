@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format } from "date-fns";
+import { format, startOfWeek, addDays, getISOWeek, getISOWeekYear } from "date-fns";
 import { Flag, Calendar as CalendarIcon, Tag, Check, FolderOpen } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
@@ -16,6 +16,24 @@ import { useLabelStore } from "@/stores/labelStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { api } from "@/lib/api";
 import type { TaskWithLabels, Priority } from "@proj-mgmt/shared";
+
+function getISOWeekString(date: Date): string {
+  const year = getISOWeekYear(date);
+  const week = getISOWeek(date);
+  return `${year}-W${week.toString().padStart(2, "0")}`;
+}
+
+function formatScheduledWeek(week: string): string {
+  const today = new Date();
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const nextWeekStart = addDays(currentWeekStart, 7);
+  const currentWeekString = getISOWeekString(currentWeekStart);
+  const nextWeekString = getISOWeekString(nextWeekStart);
+
+  if (week === currentWeekString) return "This Week";
+  if (week === nextWeekString) return "Next Week";
+  return week;
+}
 
 const priorityColors: Record<Priority, string> = {
   P1: "text-red-500",
@@ -64,6 +82,9 @@ export function TaskEditPopover({
   const [dueDate, setDueDate] = useState<Date | undefined>(
     task.dueDate ? new Date(task.dueDate) : undefined
   );
+  const [scheduledWeek, setScheduledWeek] = useState<string | null>(
+    task.scheduledWeek ?? null
+  );
   const [labelIds, setLabelIds] = useState<string[]>(
     task.labels.map(({ label }) => label.id)
   );
@@ -79,6 +100,7 @@ export function TaskEditPopover({
       setDescription(task.description || "");
       setPriority(task.priority);
       setDueDate(task.dueDate ? new Date(task.dueDate) : undefined);
+      setScheduledWeek(task.scheduledWeek ?? null);
       setLabelIds(task.labels.map(({ label }) => label.id));
       setProjectId(task.projectId);
     }
@@ -102,7 +124,8 @@ export function TaskEditPopover({
         content: content.trim(),
         description: description.trim() || undefined,
         priority,
-        dueDate: dueDate?.toISOString() || undefined,
+        dueDate: dueDate ? dueDate.toISOString() : null,
+        scheduledWeek: scheduledWeek,
         labelIds,
         projectId: projectId ?? undefined,
       });
@@ -184,15 +207,25 @@ export function TaskEditPopover({
                 <CalendarIcon className="h-3.5 w-3.5 text-zinc-500" />
                 <span
                   className={cn(
-                    dueDate ? "text-green-500" : "text-zinc-500"
+                    (dueDate || scheduledWeek) ? "text-green-500" : "text-zinc-500"
                   )}
                 >
-                  {dueDate ? format(dueDate, "MMM d") : "No date"}
+                  {dueDate
+                    ? format(dueDate, "MMM d")
+                    : scheduledWeek
+                    ? formatScheduledWeek(scheduledWeek)
+                    : "No date"}
                 </span>
               </button>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0 bg-[#1e1e1e] border-[#3d3d3d]" align="start" side="left">
-              <DatePicker date={dueDate} onSelect={setDueDate} onClose={() => setDatePickerOpen(false)} />
+              <DatePicker
+                date={dueDate}
+                scheduledWeek={scheduledWeek}
+                onSelect={setDueDate}
+                onSelectWeek={setScheduledWeek}
+                onClose={() => setDatePickerOpen(false)}
+              />
             </PopoverContent>
           </Popover>
 

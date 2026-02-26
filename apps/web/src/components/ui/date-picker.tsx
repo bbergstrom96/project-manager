@@ -1,14 +1,22 @@
 "use client";
 
 import * as React from "react";
-import { format, addDays, nextSaturday, nextMonday, isToday, isTomorrow, isSaturday, isSunday } from "date-fns";
-import { Sun, Calendar as CalendarIcon, Sofa, ArrowRight, Circle, CalendarCheck } from "lucide-react";
+import { format, addDays, isToday, isTomorrow, startOfWeek, getISOWeek, getISOWeekYear } from "date-fns";
+import { Sun, CalendarDays, ArrowRight, Circle, CalendarCheck } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Calendar } from "./calendar";
 
+function getISOWeekString(date: Date): string {
+  const year = getISOWeekYear(date);
+  const week = getISOWeek(date);
+  return `${year}-W${week.toString().padStart(2, "0")}`;
+}
+
 interface DatePickerProps {
   date: Date | undefined;
+  scheduledWeek?: string | null;
   onSelect: (date: Date | undefined) => void;
+  onSelectWeek?: (week: string | null) => void;
   onClose?: () => void;
   className?: string;
 }
@@ -17,45 +25,19 @@ interface QuickOption {
   icon: React.ReactNode;
   label: string;
   sublabel: string;
-  getDate: () => Date;
+  action: () => void;
   iconColor?: string;
 }
 
-export function DatePicker({ date, onSelect, onClose, className }: DatePickerProps) {
+export function DatePicker({ date, scheduledWeek, onSelect, onSelectWeek, onClose, className }: DatePickerProps) {
   const today = new Date();
-
-  // Calculate quick option dates
   const tomorrow = addDays(today, 1);
 
-  // "Later this week" = Friday (if today is Mon-Wed), otherwise skip
-  const getLaterThisWeek = (): Date | null => {
-    const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    if (dayOfWeek >= 0 && dayOfWeek <= 3) {
-      // Sunday through Wednesday - show Friday
-      const daysUntilFriday = 5 - dayOfWeek;
-      return addDays(today, daysUntilFriday);
-    }
-    return null;
-  };
-
-  // "This weekend" = Saturday
-  const getThisWeekend = (): Date => {
-    const dayOfWeek = today.getDay();
-    if (dayOfWeek === 6) return today; // Already Saturday
-    if (dayOfWeek === 0) return addDays(today, 6); // Sunday -> next Saturday
-    return nextSaturday(today);
-  };
-
-  // "Next week" = Next Monday
-  const getNextWeek = (): Date => {
-    const dayOfWeek = today.getDay();
-    if (dayOfWeek === 1) return addDays(today, 7); // Monday -> next Monday
-    return nextMonday(today);
-  };
-
-  const laterThisWeek = getLaterThisWeek();
-  const thisWeekend = getThisWeekend();
-  const nextWeek = getNextWeek();
+  // Calculate week strings
+  const currentWeekStart = startOfWeek(today, { weekStartsOn: 1 });
+  const nextWeekStart = addDays(currentWeekStart, 7);
+  const currentWeekString = getISOWeekString(currentWeekStart);
+  const nextWeekString = getISOWeekString(nextWeekStart);
 
   const quickOptions: (QuickOption | null)[] = [
     // Only show Today option if not already set to today
@@ -63,63 +45,84 @@ export function DatePicker({ date, onSelect, onClose, className }: DatePickerPro
       icon: <CalendarCheck className="h-4 w-4" />,
       label: "Today",
       sublabel: format(today, "EEE"),
-      getDate: () => today,
+      action: () => {
+        onSelect(today);
+        onSelectWeek?.(null);
+        onClose?.();
+      },
       iconColor: "text-green-500",
     } : null,
     {
       icon: <Sun className="h-4 w-4" />,
       label: "Tomorrow",
       sublabel: format(tomorrow, "EEE"),
-      getDate: () => tomorrow,
+      action: () => {
+        onSelect(tomorrow);
+        onSelectWeek?.(null);
+        onClose?.();
+      },
       iconColor: "text-yellow-500",
     },
-    laterThisWeek ? {
-      icon: <CalendarIcon className="h-4 w-4" />,
-      label: "Later this week",
-      sublabel: format(laterThisWeek, "EEE"),
-      getDate: () => laterThisWeek,
-      iconColor: "text-blue-500",
-    } : null,
     {
-      icon: <Sofa className="h-4 w-4" />,
-      label: "This weekend",
-      sublabel: format(thisWeekend, "EEE"),
-      getDate: () => thisWeekend,
-      iconColor: "text-blue-400",
+      icon: <CalendarDays className="h-4 w-4" />,
+      label: "This Week",
+      sublabel: currentWeekString,
+      action: () => {
+        onSelect(undefined);
+        onSelectWeek?.(currentWeekString);
+        onClose?.();
+      },
+      iconColor: "text-blue-500",
     },
     {
       icon: <ArrowRight className="h-4 w-4" />,
-      label: "Next week",
-      sublabel: format(nextWeek, "EEE MMM d"),
-      getDate: () => nextWeek,
+      label: "Next Week",
+      sublabel: nextWeekString,
+      action: () => {
+        onSelect(undefined);
+        onSelectWeek?.(nextWeekString);
+        onClose?.();
+      },
       iconColor: "text-purple-500",
     },
   ];
 
-  const handleQuickSelect = (option: QuickOption) => {
-    onSelect(option.getDate());
-    onClose?.();
-  };
-
   const handleNoDate = () => {
     onSelect(undefined);
+    onSelectWeek?.(null);
     onClose?.();
   };
 
   const handleCalendarSelect = (selectedDate: Date | undefined) => {
     onSelect(selectedDate);
     if (selectedDate) {
+      onSelectWeek?.(null);
       onClose?.();
     }
   };
 
+  // Display current selection
+  const getCurrentSelectionLabel = () => {
+    if (date) {
+      return isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "MMM d");
+    }
+    if (scheduledWeek) {
+      if (scheduledWeek === currentWeekString) return "This Week";
+      if (scheduledWeek === nextWeekString) return "Next Week";
+      return scheduledWeek;
+    }
+    return null;
+  };
+
+  const selectionLabel = getCurrentSelectionLabel();
+
   return (
     <div className={cn("w-64", className)}>
       {/* Current selection */}
-      {date && (
+      {selectionLabel && (
         <div className="px-3 py-2 border-b border-[#3d3d3d]">
           <span className="text-sm font-medium text-blue-400">
-            {isToday(date) ? "Today" : isTomorrow(date) ? "Tomorrow" : format(date, "MMM d")}
+            {selectionLabel}
           </span>
         </div>
       )}
@@ -129,7 +132,7 @@ export function DatePicker({ date, onSelect, onClose, className }: DatePickerPro
         {quickOptions.filter(Boolean).map((option) => (
           <button
             key={option!.label}
-            onClick={() => handleQuickSelect(option!)}
+            onClick={option!.action}
             className="flex items-center gap-3 w-full px-3 py-2 text-sm hover:bg-[#2d2d2d] transition-colors"
           >
             <span className={option!.iconColor}>{option!.icon}</span>

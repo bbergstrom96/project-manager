@@ -68,8 +68,9 @@ model Task {
   isCompleted Boolean   @default(false)
   completedAt DateTime?
 
-  dueDate     DateTime?
-  dueDateTime DateTime?
+  dueDate       DateTime?
+  dueDateTime   DateTime?
+  scheduledWeek String?    // ISO week format: "2026-W08" - for "this week" without specific day
 
   order Int @default(0)
 
@@ -97,6 +98,7 @@ model Task {
   @@index([areaId])
   @@index([isCompleted])
   @@index([dueDate])
+  @@index([scheduledWeek])
   @@index([priority])
   @@index([order])
 }

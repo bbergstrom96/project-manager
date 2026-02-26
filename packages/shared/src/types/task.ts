@@ -9,6 +9,7 @@ export interface Task {
   completedAt: Date | null;
   dueDate: Date | null;
   dueDateTime: Date | null;
+  scheduledWeek: string | null;
   order: number;
   projectId: string | null;
   sectionId: string | null;
@@ -36,6 +37,7 @@ export interface CreateTaskInput {
   priority?: Priority;
   dueDate?: string;
   dueDateTime?: string;
+  scheduledWeek?: string;
   projectId?: string;
   sectionId?: string;
   areaId?: string;
@@ -49,6 +51,7 @@ export interface UpdateTaskInput {
   priority?: Priority;
   dueDate?: string | null;
   dueDateTime?: string | null;
+  scheduledWeek?: string | null;
   projectId?: string | null;
   sectionId?: string | null;
   areaId?: string | null;

@@ -14,6 +14,8 @@ import {
   startOfDay,
   addWeeks,
   subWeeks,
+  getISOWeek,
+  getISOWeekYear,
 } from "date-fns";
 import {
   DndContext,
@@ -48,6 +50,12 @@ function getDayLabel(date: Date): string {
   if (isToday(date)) return "Today";
   if (isTomorrow(date)) return "Tomorrow";
   return format(date, "EEEE");
+}
+
+function getISOWeekString(date: Date): string {
+  const year = getISOWeekYear(date);
+  const week = getISOWeek(date);
+  return `${year}-W${week.toString().padStart(2, "0")}`;
 }
 
 // Custom collision detection - prefers task collisions for reordering, falls back to rows
@@ -111,6 +119,8 @@ export default function UpcomingPage() {
     return allWeekDays.filter((day) => !isBefore(day, today));
   }, [allWeekDays, today]);
 
+  const currentWeekString = useMemo(() => getISOWeekString(currentWeekStart), [currentWeekStart]);
+
   useEffect(() => {
     async function fetchWeekTasks() {
       setIsLoading(true);
@@ -118,8 +128,12 @@ export default function UpcomingPage() {
         const allTasks = await api.tasks.list({});
         const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
 
-        // Include tasks for this week AND overdue tasks
+        // Include tasks for this week, overdue tasks, AND unscheduled tasks for this week
         const relevantTasks = allTasks.filter((task) => {
+          // Include unscheduled tasks (scheduledWeek set but no dueDate)
+          if (!task.dueDate && task.scheduledWeek === currentWeekString) {
+            return true;
+          }
           if (!task.dueDate) return false;
           const taskDate = startOfDay(new Date(task.dueDate));
           // Include if in this week OR overdue (before today)
@@ -134,12 +148,13 @@ export default function UpcomingPage() {
       }
     }
     fetchWeekTasks();
-  }, [currentWeekStart, today]);
+  }, [currentWeekStart, currentWeekString, today]);
 
-  // Separate overdue tasks from regular day tasks
-  const { tasksByDay, overdueTasks } = useMemo(() => {
+  // Separate overdue, unscheduled, and day tasks
+  const { tasksByDay, overdueTasks, unscheduledTasks } = useMemo(() => {
     const grouped = new Map<string, TaskWithLabels[]>();
     const overdue: TaskWithLabels[] = [];
+    const unscheduled: TaskWithLabels[] = [];
 
     weekDays.forEach((day) => {
       const dateKey = format(day, "yyyy-MM-dd");
@@ -147,6 +162,12 @@ export default function UpcomingPage() {
     });
 
     tasks.forEach((task) => {
+      // Unscheduled: has scheduledWeek but no dueDate
+      if (!task.dueDate && task.scheduledWeek === currentWeekString) {
+        unscheduled.push(task);
+        return;
+      }
+
       if (task.dueDate) {
         const taskDate = startOfDay(new Date(task.dueDate));
         const dateKey = format(taskDate, "yyyy-MM-dd");
@@ -163,8 +184,8 @@ export default function UpcomingPage() {
       }
     });
 
-    return { tasksByDay: grouped, overdueTasks: overdue };
-  }, [tasks, weekDays, today]);
+    return { tasksByDay: grouped, overdueTasks: overdue, unscheduledTasks: unscheduled };
+  }, [tasks, weekDays, today, currentWeekString]);
 
   const navigateWeek = (delta: number) => {
     setCurrentWeekStart((prev) =>
@@ -207,7 +228,11 @@ export default function UpcomingPage() {
   };
 
   const getTaskDateKey = useCallback((task: TaskWithLabels) => {
-    if (!task.dueDate) return null;
+    if (!task.dueDate) {
+      // Unscheduled tasks use "unscheduled" as their key
+      if (task.scheduledWeek) return "unscheduled";
+      return null;
+    }
     return format(new Date(task.dueDate), "yyyy-MM-dd");
   }, []);
 
@@ -245,6 +270,18 @@ export default function UpcomingPage() {
       setActiveRow(targetDateKey);
 
       const taskId = active.id as string;
+
+      // Moving to unscheduled
+      if (targetDateKey === "unscheduled") {
+        setTasks((prev) =>
+          prev.map((t) =>
+            t.id === taskId ? { ...t, dueDate: null, scheduledWeek: currentWeekString } : t
+          )
+        );
+        return;
+      }
+
+      // Moving to a specific day
       const targetDay = weekDays.find(
         (d) => format(d, "yyyy-MM-dd") === targetDateKey
       );
@@ -284,8 +321,26 @@ export default function UpcomingPage() {
       }
     }
 
-    // Moving to a different day
+    // Moving to a different day or section
     if (targetDateKey && targetDateKey !== originalDateKey) {
+      // Moving to unscheduled
+      if (targetDateKey === "unscheduled") {
+        try {
+          await api.tasks.update(taskId, {
+            dueDate: null,
+            scheduledWeek: currentWeekString
+          });
+          invalidateTaskStore();
+        } catch (error) {
+          console.error("Failed to update task:", error);
+          setTasks((prev) =>
+            prev.map((t) => (t.id === taskId ? task : t))
+          );
+        }
+        return;
+      }
+
+      // Moving to a specific day
       const targetDay = weekDays.find(
         (d) => format(d, "yyyy-MM-dd") === targetDateKey
       );
@@ -303,24 +358,27 @@ export default function UpcomingPage() {
         }
       }
     }
-    // Reordering within the same day
+    // Reordering within the same section
     else if (targetDateKey && targetDateKey === originalDateKey && overId !== taskId && !overId.startsWith("row-")) {
-      const dayTasks = tasksByDay.get(targetDateKey) || [];
-      const oldIndex = dayTasks.findIndex((t) => t.id === taskId);
-      const newIndex = dayTasks.findIndex((t) => t.id === overId);
+      // Get the appropriate task list for reordering
+      const sectionTasks = targetDateKey === "unscheduled"
+        ? unscheduledTasks
+        : tasksByDay.get(targetDateKey) || [];
+      const oldIndex = sectionTasks.findIndex((t) => t.id === taskId);
+      const newIndex = sectionTasks.findIndex((t) => t.id === overId);
 
       if (oldIndex !== -1 && newIndex !== -1 && oldIndex !== newIndex) {
-        const reorderedDayTasks = arrayMove(dayTasks, oldIndex, newIndex);
+        const reorderedTasks = arrayMove(sectionTasks, oldIndex, newIndex);
 
         // Update local state
         setTasks((prev) => {
           const otherTasks = prev.filter((t) => getTaskDateKey(t) !== targetDateKey);
-          return [...otherTasks, ...reorderedDayTasks];
+          return [...otherTasks, ...reorderedTasks];
         });
 
         // Persist reorder to API
         try {
-          await api.tasks.reorder(reorderedDayTasks.map((t) => t.id));
+          await api.tasks.reorder(reorderedTasks.map((t) => t.id));
         } catch (error) {
           console.error("Failed to reorder tasks:", error);
         }
@@ -432,6 +490,84 @@ export default function UpcomingPage() {
               </div>
             )}
 
+            {/* Unscheduled Section */}
+            <DroppableRow
+              id="row-unscheduled"
+              isOver={activeRow === "unscheduled"}
+            >
+              <div className="rounded-lg">
+                {/* Unscheduled Header */}
+                <button
+                  onClick={() => toggleDayCollapse("unscheduled")}
+                  className="flex items-center gap-2 mb-3 group"
+                >
+                  {collapsedDays.has("unscheduled") ? (
+                    <ChevronRightIcon className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                  )}
+                  <span className="text-sm font-semibold px-2 py-0.5 rounded bg-blue-600 text-white">
+                    Unscheduled
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {unscheduledTasks.length}
+                  </span>
+                </button>
+
+                {/* Unscheduled Content */}
+                {!collapsedDays.has("unscheduled") && (
+                  <div className="pl-6">
+                    {isLoading ? (
+                      <div className="flex gap-3">
+                        {[...Array(2)].map((_, i) => (
+                          <div
+                            key={i}
+                            className="w-64 h-24 bg-muted rounded-lg animate-pulse flex-shrink-0"
+                          />
+                        ))}
+                      </div>
+                    ) : (
+                      <SortableContext
+                        items={unscheduledTasks.map((t) => t.id)}
+                        strategy={horizontalListSortingStrategy}
+                      >
+                        <div className="flex flex-wrap gap-3 items-stretch">
+                          {unscheduledTasks.map((task) => (
+                            <DraggableTaskCard
+                              key={task.id}
+                              task={task}
+                              onComplete={handleTaskCompleted}
+                              onUpdate={handleTaskUpdated}
+                              isDragging={activeTask?.id === task.id}
+                            />
+                          ))}
+
+                          {addingTaskForDay === "unscheduled" ? (
+                            <div className="w-64 bg-[#2d2d2d] border border-[#3d3d3d] rounded-lg p-3 flex-shrink-0">
+                              <TaskForm
+                                defaultScheduledWeek={currentWeekString}
+                                onClose={() => setAddingTaskForDay(null)}
+                                onCreated={handleTaskCreated}
+                                compact
+                              />
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => setAddingTaskForDay("unscheduled")}
+                              className="flex items-center justify-center gap-2 w-64 min-h-[4.5rem] border-2 border-dashed border-muted-foreground/25 rounded-lg text-sm text-muted-foreground hover:text-primary hover:border-primary/50 transition-colors flex-shrink-0"
+                            >
+                              <Plus className="h-4 w-4" />
+                              New task
+                            </button>
+                          )}
+                        </div>
+                      </SortableContext>
+                    )}
+                  </div>
+                )}
+              </div>
+            </DroppableRow>
+
             {weekDays.map((day) => {
               const dateKey = format(day, "yyyy-MM-dd");
               const dayTasks = tasksByDay.get(dateKey) || [];
@@ -462,7 +598,7 @@ export default function UpcomingPage() {
                         className={cn(
                           "text-sm font-semibold px-2 py-0.5 rounded",
                           isCurrentDay
-                            ? "bg-primary text-primary-foreground"
+                            ? "bg-green-600 text-white"
                             : "bg-muted"
                         )}
                       >

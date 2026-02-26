@@ -99,7 +99,16 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
 
   const handleDateSelect = async (date: Date | undefined) => {
     await updateTask(task.id, {
-      dueDate: date ? date.toISOString() : null
+      dueDate: date ? date.toISOString() : null,
+      scheduledWeek: date ? null : undefined, // Clear scheduledWeek when setting a specific date
+    });
+    setIsCalendarOpen(false);
+  };
+
+  const handleWeekSelect = async (week: string | null) => {
+    await updateTask(task.id, {
+      dueDate: week ? null : undefined, // Clear dueDate when setting a week
+      scheduledWeek: week,
     });
     setIsCalendarOpen(false);
   };
@@ -108,7 +117,7 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
     if (!newSubtaskContent.trim()) return;
     await addSubtask(task.id, { content: newSubtaskContent.trim() });
     setNewSubtaskContent("");
-    setIsAddingSubtask(false);
+    // Keep input open for adding more subtasks
   };
 
   const handleSubtaskKeyDown = (e: React.KeyboardEvent) => {
@@ -244,7 +253,9 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
               <PopoverContent className="w-auto p-0 bg-[#1e1e1e] border-[#3d3d3d]" align="end">
                 <DatePicker
                   date={task.dueDate ? new Date(task.dueDate) : undefined}
+                  scheduledWeek={task.scheduledWeek}
                   onSelect={handleDateSelect}
+                  onSelectWeek={handleWeekSelect}
                   onClose={() => setIsCalendarOpen(false)}
                 />
               </PopoverContent>
@@ -306,8 +317,10 @@ export function TaskItem({ task, hideProject, hideDueDate, isDragging: isDraggin
 
 // Subtask item component
 function SubtaskItem({ subtask, parentId }: { subtask: SubtaskWithLabels; parentId: string }) {
-  const { completeTask, deleteTask, removeSubtaskFromParent } = useTaskStore();
+  const { completeTask, deleteTask, removeSubtaskFromParent, updateSubtask } = useTaskStore();
   const [isHovered, setIsHovered] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editContent, setEditContent] = useState(subtask.content);
 
   const handleComplete = async () => {
     removeSubtaskFromParent(parentId, subtask.id);
@@ -319,9 +332,27 @@ function SubtaskItem({ subtask, parentId }: { subtask: SubtaskWithLabels; parent
     await deleteTask(subtask.id);
   };
 
+  const handleSaveEdit = async () => {
+    if (!editContent.trim()) return;
+    if (editContent.trim() !== subtask.content) {
+      await updateSubtask(parentId, subtask.id, { content: editContent.trim() });
+    }
+    setIsEditing(false);
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSaveEdit();
+    } else if (e.key === "Escape") {
+      setEditContent(subtask.content);
+      setIsEditing(false);
+    }
+  };
+
   return (
     <div
-      className="group flex items-center gap-2 py-1 px-2 hover:bg-muted/50 rounded-md transition-colors"
+      className="group flex items-center gap-2 py-1 px-2 ml-6 hover:bg-muted/50 rounded-md transition-colors"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -332,7 +363,23 @@ function SubtaskItem({ subtask, parentId }: { subtask: SubtaskWithLabels; parent
           priorityColors[subtask.priority]
         )}
       />
-      <span className="flex-1 text-sm text-muted-foreground">{subtask.content}</span>
+      {isEditing ? (
+        <Input
+          autoFocus
+          value={editContent}
+          onChange={(e) => setEditContent(e.target.value)}
+          onKeyDown={handleEditKeyDown}
+          onBlur={handleSaveEdit}
+          className="flex-1 h-6 text-sm border-none bg-transparent focus-visible:ring-0 px-0"
+        />
+      ) : (
+        <span
+          className="flex-1 text-sm text-muted-foreground cursor-pointer"
+          onClick={() => setIsEditing(true)}
+        >
+          {subtask.content}
+        </span>
+      )}
       <div className={cn("flex items-center gap-1", !isHovered && "opacity-0")}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

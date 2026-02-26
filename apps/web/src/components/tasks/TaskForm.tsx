@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { format } from "date-fns";
+import { useState, useEffect, useRef, useMemo } from "react";
+import { format, isToday, isTomorrow } from "date-fns";
 import {
   Calendar as CalendarIcon,
   Flag,
@@ -23,6 +23,8 @@ import { useTaskStore } from "@/stores/taskStore";
 import { useProjectStore } from "@/stores/projectStore";
 import { useLabelStore } from "@/stores/labelStore";
 import { useUIStore } from "@/stores/uiStore";
+import { useProjectAutocomplete } from "@/components/tasks/ProjectAutocomplete";
+import { parseTaskInput } from "@/lib/taskParser";
 import type { Priority, TaskWithLabels } from "@proj-mgmt/shared";
 
 const priorities: { value: Priority; label: string; color: string }[] = [
@@ -37,12 +39,13 @@ interface TaskFormProps {
   sectionId?: string;
   areaId?: string;
   defaultDueDate?: string;
+  defaultScheduledWeek?: string;
   onClose?: () => void;
   onCreated?: (task: TaskWithLabels) => void;
   compact?: boolean;
 }
 
-export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectionId, areaId: defaultAreaId, defaultDueDate, onClose, onCreated, compact }: TaskFormProps) {
+export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectionId, areaId: defaultAreaId, defaultDueDate, defaultScheduledWeek, onClose, onCreated, compact }: TaskFormProps) {
   const { addTask, fetchTasks } = useTaskStore();
   const { projects, fetchProjects } = useProjectStore();
   const { labels, fetchLabels } = useLabelStore();
@@ -54,16 +57,74 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
   const [dueDate, setDueDate] = useState<Date | undefined>(
     defaultDueDate ? new Date(defaultDueDate) : undefined
   );
+  const [scheduledWeek, setScheduledWeek] = useState<string | null>(
+    defaultScheduledWeek ?? null
+  );
   const [projectId, setProjectId] = useState<string | undefined>(defaultProjectId);
   const [labelIds, setLabelIds] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Project autocomplete hook
+  const autocomplete = useProjectAutocomplete(
+    content,
+    setContent,
+    (id) => setProjectId(id),
+    projects,
+    inputRef
+  );
+
+  // Live parsing preview - shows detected date/project as user types
+  const parsedPreview = useMemo(() => {
+    if (!content.trim()) return null;
+    return parseTaskInput(content, projects);
+  }, [content, projects]);
+
+  // Format detected date for display
+  const detectedDateLabel = useMemo(() => {
+    if (parsedPreview?.scheduledWeek) {
+      // Check if content contains "this week" or "next week" to determine label
+      const lowerContent = content.toLowerCase();
+      if (lowerContent.includes("this week")) return "This Week";
+      if (lowerContent.includes("next week")) return "Next Week";
+      return parsedPreview.scheduledWeek;
+    }
+    if (!parsedPreview?.dueDate) return null;
+    const date = parsedPreview.dueDate;
+    if (isToday(date)) return "Today";
+    if (isTomorrow(date)) return "Tomorrow";
+    return format(date, "EEE, MMM d");
+  }, [parsedPreview, content]);
+
+  // Get detected project name
+  const detectedProject = useMemo(() => {
+    if (!parsedPreview?.projectId) return null;
+    return projects.find((p) => p.id === parsedPreview.projectId);
+  }, [parsedPreview, projects]);
 
   useEffect(() => {
     if (projects.length === 0) fetchProjects();
     if (labels.length === 0) fetchLabels();
   }, [projects.length, labels.length, fetchProjects, fetchLabels]);
+
+  // Handle clicking outside to close autocomplete
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        inputRef.current &&
+        !inputRef.current.contains(event.target as Node)
+      ) {
+        autocomplete.close();
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [autocomplete]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,14 +132,23 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
 
     setIsSubmitting(true);
     try {
+      // Parse natural language from content
+      const parsed = parseTaskInput(content, projects);
+
+      // Use parsed values, falling back to manually selected values
+      const finalProjectId = parsed.projectId ?? projectId;
+      const finalDueDate = parsed.dueDate ?? dueDate;
+      const finalScheduledWeek = parsed.scheduledWeek ?? scheduledWeek;
+
       const task = await addTask({
-        content: content.trim(),
+        content: parsed.content.trim(),
         description: description.trim() || undefined,
         priority,
-        dueDate: dueDate?.toISOString(),
-        projectId,
-        sectionId: projectId ? defaultSectionId : undefined, // Only assign section if in a project
-        areaId: !projectId ? defaultAreaId : undefined, // Only assign area if no project
+        dueDate: finalDueDate?.toISOString(),
+        scheduledWeek: !finalDueDate && finalScheduledWeek ? finalScheduledWeek : undefined,
+        projectId: finalProjectId,
+        sectionId: finalProjectId ? defaultSectionId : undefined, // Only assign section if in a project
+        areaId: !finalProjectId ? defaultAreaId : undefined, // Only assign area if no project
         labelIds: labelIds.length > 0 ? labelIds : undefined,
       });
 
@@ -124,23 +194,75 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
   if (compact) {
     return (
       <form onSubmit={handleSubmit} className="space-y-2">
-        <Input
-          ref={inputRef}
-          placeholder="Task name"
-          value={content}
-          onChange={(e) => setContent(e.target.value)}
-          autoFocus
-          className="text-sm"
-          onKeyDown={(e) => {
-            if (e.key === "Escape") {
-              handleCancel();
-            }
-            if (e.key === "Enter" && !content.trim()) {
-              e.preventDefault();
-              handleCancel();
-            }
-          }}
-        />
+        <div className="relative">
+          <Input
+            ref={inputRef}
+            placeholder="Task name (use # for project, natural dates work too)"
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
+            autoFocus
+            className="text-sm"
+            onKeyDown={(e) => {
+              // Let autocomplete handle keys first
+              if (autocomplete.handleKeyDown(e)) return;
+
+              if (e.key === "Escape") {
+                handleCancel();
+              }
+              if (e.key === "Enter" && !content.trim()) {
+                e.preventDefault();
+                handleCancel();
+              }
+            }}
+          />
+          {/* Autocomplete dropdown */}
+          {autocomplete.isOpen && autocomplete.suggestions.length > 0 && (
+            <div
+              ref={dropdownRef}
+              className="absolute left-0 right-0 top-full mt-1 z-50 bg-[#1e1e1e] border border-[#3d3d3d] rounded-md shadow-lg max-h-48 overflow-y-auto"
+            >
+              {autocomplete.suggestions.map((project, index) => (
+                <button
+                  key={project.id}
+                  type="button"
+                  onClick={() => autocomplete.selectProject(project)}
+                  className={cn(
+                    "flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors",
+                    index === autocomplete.selectedIndex
+                      ? "bg-[#2d2d2d] text-zinc-100"
+                      : "text-zinc-300 hover:bg-[#2d2d2d]"
+                  )}
+                >
+                  <span
+                    className="w-3 h-3 rounded-sm flex-shrink-0"
+                    style={{ backgroundColor: project.color }}
+                  />
+                  <span>{project.name}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+        {/* Detected metadata preview */}
+        {(detectedDateLabel || detectedProject) && (
+          <div className="flex items-center gap-2 flex-wrap">
+            {detectedDateLabel && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-600/20 text-green-400 flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                {detectedDateLabel}
+              </span>
+            )}
+            {detectedProject && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 flex items-center gap-1">
+                <span
+                  className="w-2 h-2 rounded-sm"
+                  style={{ backgroundColor: detectedProject.color }}
+                />
+                {detectedProject.name}
+              </span>
+            )}
+          </div>
+        )}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" size="sm" onClick={handleCancel}>
             Cancel
@@ -156,15 +278,18 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
   return (
     <form onSubmit={handleSubmit} className="border border-[#3d3d3d] rounded-lg bg-[#1e1e1e] overflow-hidden">
       {/* Content area */}
-      <div className="p-3 space-y-1">
+      <div className="p-3 space-y-1 relative">
         <Input
           ref={inputRef}
-          placeholder="Task name"
+          placeholder="Task name (use # for project)"
           value={content}
           onChange={(e) => setContent(e.target.value)}
           autoFocus
           className="border-0 p-0 text-sm font-medium focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none placeholder:text-zinc-500 bg-transparent h-auto"
           onKeyDown={(e) => {
+            // Let autocomplete handle keys first
+            if (autocomplete.handleKeyDown(e)) return;
+
             if (e.key === "Escape") {
               handleCancel();
             }
@@ -174,6 +299,33 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
             }
           }}
         />
+        {/* Autocomplete dropdown */}
+        {autocomplete.isOpen && autocomplete.suggestions.length > 0 && (
+          <div
+            ref={dropdownRef}
+            className="absolute left-3 right-3 top-full z-50 bg-[#1e1e1e] border border-[#3d3d3d] rounded-md shadow-lg max-h-48 overflow-y-auto"
+          >
+            {autocomplete.suggestions.map((project, index) => (
+              <button
+                key={project.id}
+                type="button"
+                onClick={() => autocomplete.selectProject(project)}
+                className={cn(
+                  "flex items-center gap-2 w-full px-3 py-2 text-sm text-left transition-colors",
+                  index === autocomplete.selectedIndex
+                    ? "bg-[#2d2d2d] text-zinc-100"
+                    : "text-zinc-300 hover:bg-[#2d2d2d]"
+                )}
+              >
+                <span
+                  className="w-3 h-3 rounded-sm flex-shrink-0"
+                  style={{ backgroundColor: project.color }}
+                />
+                <span>{project.name}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <Textarea
           placeholder="Description"
           value={description}
@@ -194,6 +346,26 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
           className="border-0 p-0 text-xs focus-visible:ring-0 focus-visible:ring-offset-0 focus:outline-none placeholder:text-zinc-600 bg-transparent resize-none min-h-[20px] overflow-hidden"
           rows={1}
         />
+        {/* Detected metadata preview */}
+        {(detectedDateLabel || detectedProject) && (
+          <div className="flex items-center gap-2 mt-2 flex-wrap">
+            {detectedDateLabel && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-green-600/20 text-green-400 flex items-center gap-1">
+                <CalendarIcon className="h-3 w-3" />
+                {detectedDateLabel}
+              </span>
+            )}
+            {detectedProject && (
+              <span className="text-xs px-2 py-0.5 rounded-full bg-blue-600/20 text-blue-400 flex items-center gap-1">
+                <span
+                  className="w-2 h-2 rounded-sm"
+                  style={{ backgroundColor: detectedProject.color }}
+                />
+                {detectedProject.name}
+              </span>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Icon toolbar */}
@@ -205,14 +377,20 @@ export function TaskForm({ projectId: defaultProjectId, sectionId: defaultSectio
               type="button"
               className={cn(
                 "p-1.5 rounded border border-[#3d3d3d] hover:bg-[#2d2d2d] transition-colors",
-                dueDate && "border-green-600 text-green-500"
+                (dueDate || scheduledWeek) && "border-green-600 text-green-500"
               )}
             >
               <CalendarIcon className="h-4 w-4" />
             </button>
           </PopoverTrigger>
           <PopoverContent className="w-auto p-0 bg-[#1e1e1e] border-[#3d3d3d]" align="start">
-            <DatePicker date={dueDate} onSelect={setDueDate} onClose={() => setDatePickerOpen(false)} />
+            <DatePicker
+              date={dueDate}
+              scheduledWeek={scheduledWeek}
+              onSelect={setDueDate}
+              onSelectWeek={setScheduledWeek}
+              onClose={() => setDatePickerOpen(false)}
+            />
           </PopoverContent>
         </Popover>
 

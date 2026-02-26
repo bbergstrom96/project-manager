@@ -17,6 +17,7 @@ interface TaskState {
   fetchTasks: (force?: boolean) => Promise<void>;
   addTask: (data: CreateTaskInput) => Promise<TaskWithLabels>;
   addSubtask: (parentId: string, data: Omit<CreateTaskInput, "parentId">) => Promise<void>;
+  updateSubtask: (parentId: string, subtaskId: string, data: UpdateTaskInput) => Promise<void>;
   removeSubtaskFromParent: (parentId: string, subtaskId: string) => void;
   updateTask: (id: string, data: UpdateTaskInput) => Promise<void>;
   completeTask: (id: string) => Promise<void>;
@@ -105,6 +106,25 @@ export const useTaskStore = create<TaskState>((set, get) => ({
     }));
   },
 
+  updateSubtask: async (parentId, subtaskId, data) => {
+    const updated = await api.tasks.update(subtaskId, data);
+    // Update the subtask in the parent task's subtasks array
+    set((state) => ({
+      tasks: state.tasks.map((t) =>
+        t.id === parentId
+          ? {
+              ...t,
+              subtasks: t.subtasks?.map((s) =>
+                s.id === subtaskId
+                  ? { ...s, ...updated, labels: updated.labels || [] } as SubtaskWithLabels
+                  : s
+              ) || [],
+            }
+          : t
+      ),
+    }));
+  },
+
   removeSubtaskFromParent: (parentId, subtaskId) => {
     set((state) => ({
       tasks: state.tasks.map((t) =>
@@ -128,6 +148,9 @@ export const useTaskStore = create<TaskState>((set, get) => ({
         : undefined,
       dueDateTime: data.dueDateTime !== undefined
         ? (data.dueDateTime ? new Date(data.dueDateTime) : null)
+        : undefined,
+      scheduledWeek: data.scheduledWeek !== undefined
+        ? (data.scheduledWeek ?? null)
         : undefined,
     };
     // Remove undefined values so we don't overwrite existing data
